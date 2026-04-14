@@ -656,7 +656,7 @@ msgid "IOI (pre-2016)"
 msgstr ""
 
 #: judge/contest_format/vnoj.py:49
-msgid "VNOJ"
+msgid "UNIOJ"
 msgstr ""
 
 #: judge/custom_translations.py:11
@@ -889,8 +889,8 @@ msgid "Problem URL"
 msgstr "Link bài"
 
 #: judge/forms.py:379
-msgid "Full URL to the problem, e.g. https://oj.vnoi.info/problem/post"
-msgstr "Link tới bài tập, ví dụ: https://oj.vnoi.info/problem/post"
+msgid "Full URL to the problem, e.g. https://example.com/problem/problem-slug"
+msgstr "Link tới bài tập, ví dụ: https://example.com/problem/problem-slug"
 
 #: judge/forms.py:418 judge/views/register.py:26
 #: templates/blog/top-contrib.html:8 templates/blog/top-pp.html:8
@@ -1169,10 +1169,10 @@ msgstr "số phút đóng băng"
 #: judge/models/contest.py:91
 msgid ""
 "If set, the scoreboard will be frozen for the last X minutes. Only available "
-"for ICPC and VNOJ format."
+"for ICPC and UNIOJ format."
 msgstr ""
 "Nếu được thiết lập, bảng xếp hạng sẽ dược đóng băng trong X phút cuối. Chỉ "
-"hỗ trợ format ICPC và VNOJ."
+"hỗ trợ format ICPC và UNIOJ."
 
 #: judge/models/contest.py:93 judge/models/problem.py:183
 msgid "publicly visible"
@@ -4545,11 +4545,6 @@ msgstr "Trang web này hoạt động tốt nhất khi JavaScript được cho p
 #, python-format
 msgid "proudly powered by %(dmoj)s"
 msgstr "dựa trên nền tảng %(dmoj)s"
-
-#: templates/base.html:355
-#, python-format
-msgid "follow us on %(github)s and %(facebook)s"
-msgstr "theo dõi VNOI trên %(github)s và %(facebook)s"
 
 #: templates/blog/blog-list-tabs.html:4
 msgid "Newsfeed"

@@ -1,17 +1,26 @@
 import logging
+import json
 import os
 import re
+import signal
+import subprocess
+import threading
+import uuid
 from datetime import timedelta
 from operator import itemgetter
+from pathlib import Path
 from random import randrange
 
 from django.conf import settings
+from django.contrib import messages
+from django.contrib.auth.models import User
 from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin
 from django.core.exceptions import ObjectDoesNotExist, PermissionDenied
 from django.db import transaction
 from django.db.models import BooleanField, Case, F, Prefetch, Q, When
 from django.db.utils import ProgrammingError
 from django.http import Http404, HttpResponse, HttpResponseForbidden, HttpResponseRedirect
+from django.http import JsonResponse
 from django.shortcuts import get_object_or_404
 from django.template.loader import get_template
 from django.urls import reverse
@@ -26,7 +35,7 @@ from django.views.generic.detail import SingleObjectMixin
 from reversion import revisions
 
 from judge.comments import CommentedDetailView
-from judge.forms import LanguageLimitFormSet, ProblemCloneForm, ProblemEditForm, ProblemSubmitForm, \
+from judge.forms import LanguageLimitFormSet, PolygonImportForm, ProblemCloneForm, ProblemEditForm, ProblemSubmitForm, \
     ProposeProblemSolutionFormSet
 from judge.models import ContestSubmission, Judge, Language, Problem, ProblemGroup, \
     ProblemTranslation, ProblemType, RuntimeVersion, Solution, Submission, SubmissionSource
@@ -373,7 +382,16 @@ class ProblemList(QueryStringSortMixin, TitleMixin, SolvedProblemMixin, ListView
         return queryset.search(query, queryset.BOOLEAN).extra(order_by=['-relevance'])
 
     def get_filter(self):
-        _filter = Q(is_public=True) & Q(is_organization_private=False)
+        user = self.request.user
+
+        # Users with global private-problem visibility should see all problems.
+        if user.has_perm('judge.see_private_problem') or user.has_perm('judge.edit_all_problem'):
+            return Q()
+
+        _filter = Q(is_public=True)
+        if not user.has_perm('judge.see_organization_problem'):
+            _filter &= Q(is_organization_private=False)
+
         if self.profile is not None:
             _filter = Problem.q_add_author_curator_tester(_filter, self.profile)
         return _filter
@@ -847,6 +865,310 @@ class ProblemSuggest(ProblemCreate):
         on_new_problem.delay(problem.code, is_suggested=True)
         return HttpResponseRedirect(self.get_success_url())
 
+
+class ProblemImportPolygon(PermissionRequiredMixin, TitleMixin, TemplateResponseMixin, View):
+    permission_required = 'judge.add_problem'
+    template_name = 'problem/import-polygon.html'
+    title = gettext_lazy('Import Polygon')
+    _job_dir = Path('/tmp/polygon-import-jobs')
+
+    def get(self, request, *args, **kwargs):
+        initial = {
+            'api_key': request.session.get('polygon_api_key', ''),
+            'api_secret': request.session.get('polygon_api_secret', ''),
+        }
+        form = PolygonImportForm(initial=initial)
+        job_id = request.GET.get('job', '').strip() or None
+        return self._render(request, form, job_id=job_id)
+
+    def post(self, request, *args, **kwargs):
+        form = PolygonImportForm(request.POST)
+        if not form.is_valid():
+            return self._render(request, form)
+
+        cleaned = form.cleaned_data
+        api_key = (cleaned.get('api_key') or '').strip() or request.session.get('polygon_api_key', '')
+        api_secret = (cleaned.get('api_secret') or '').strip() or request.session.get('polygon_api_secret', '')
+        if not api_key or not api_secret:
+            messages.error(request, _('Please provide Polygon API key and API secret.'))
+            return self._render(request, form)
+
+        request.session['polygon_api_key'] = api_key
+        request.session['polygon_api_secret'] = api_secret
+
+        authors, curators = self._build_default_owners(request.user)
+        problem_ref = cleaned['problem'].strip()
+        timeout = 900
+
+        if not request.session.session_key:
+            request.session.save()
+        session_key = request.session.session_key
+        job_id = self._start_import_job(
+            session_key=session_key,
+            api_key=api_key,
+            api_secret=api_secret,
+            problem_ref=problem_ref,
+            authors=authors,
+            curators=curators,
+            timeout=timeout,
+        )
+        return HttpResponseRedirect(f"{reverse('problem_import_polygon')}?job={job_id}")
+
+    def _render(self, request, form, **extra):
+        context = {
+            'form': form,
+            'title': self.title,
+            'tab': 'import_polygon',
+            'content_title': _('Import Polygon problem'),
+        }
+        context.update(extra)
+        return self.render_to_response({
+            **context,
+        })
+
+    @staticmethod
+    def _parse_usernames(raw):
+        if not raw:
+            return []
+        return [token for token in re.split(r'[\s,]+', raw.strip()) if token]
+
+    @staticmethod
+    def _extract_problem_code(problem_ref):
+        problem_ref = problem_ref.strip()
+        if problem_ref.isdigit():
+            return problem_ref
+        match = re.search(r'(\d+)$', problem_ref)
+        return match.group(1) if match else None
+
+    @staticmethod
+    def _extract_progress(logs, success=False):
+        progress = 0
+        if logs:
+            matches = re.findall(r'\[(\d{1,3})%\]', logs)
+            if matches:
+                progress = max(min(int(x), 100) for x in matches)
+        if success:
+            return 100
+        return progress
+
+    @staticmethod
+    def _build_default_owners(current_user):
+        usernames = []
+        admin_user = User.objects.filter(username='admin').first()
+        if admin_user:
+            usernames.append(admin_user.username)
+        if current_user and current_user.is_authenticated:
+            usernames.append(current_user.username)
+        usernames = list(dict.fromkeys(usernames))
+        return usernames, usernames
+
+    def _job_paths(self, job_id):
+        self._job_dir.mkdir(parents=True, exist_ok=True)
+        return (
+            self._job_dir / f"{job_id}.log",
+            self._job_dir / f"{job_id}.json",
+        )
+
+    def _write_job_meta(self, meta_path, data):
+        meta_path.write_text(json.dumps(data), encoding='utf-8')
+
+    def _read_job_meta(self, meta_path):
+        if not meta_path.exists():
+            return {}
+        try:
+            return json.loads(meta_path.read_text(encoding='utf-8'))
+        except json.JSONDecodeError:
+            return {}
+
+    def _start_import_job(self, session_key, api_key, api_secret, problem_ref, authors, curators, timeout):
+        job_id = uuid.uuid4().hex
+        log_path, meta_path = self._job_paths(job_id)
+        log_path.write_text("", encoding='utf-8')
+        meta = {
+            'job_id': job_id,
+            'running': True,
+            'progress': 0,
+            'failed': False,
+            'cancelled': False,
+            'cancel_requested': False,
+            'error': '',
+            'problem_ref': problem_ref,
+            'problem_code': self._extract_problem_code(problem_ref),
+            'owner_session_key': session_key,
+            'pid': None,
+        }
+        self._write_job_meta(meta_path, meta)
+
+        repo_root = Path(settings.BASE_DIR).resolve().parent
+        project_root = repo_root.parent
+        cli_script = project_root / 'scripts' / 'import_polygon'
+        command = [
+            'bash',
+            str(cli_script),
+            '--api-key',
+            api_key,
+            '--api-secret',
+            api_secret,
+            problem_ref,
+            '--timeout',
+            str(timeout),
+            '--poll-interval',
+            '5',
+        ]
+        if authors:
+            command.extend(['--authors'] + authors)
+        if curators:
+            command.extend(['--curators'] + curators)
+
+        with open(log_path, 'a', encoding='utf-8') as log_file:
+            log_file.write(
+                f"Runner: web -> {cli_script}\n"
+                f"Problem ref: {problem_ref}\n"
+            )
+            log_file.flush()
+            process = subprocess.Popen(
+                command,
+                cwd=str(project_root),
+                stdout=log_file,
+                stderr=subprocess.STDOUT,
+                text=True,
+                bufsize=1,
+                preexec_fn=os.setsid,
+            )
+        meta = self._read_job_meta(meta_path)
+        meta['pid'] = process.pid
+        self._write_job_meta(meta_path, meta)
+
+        def _monitor():
+            return_code = process.wait()
+            latest = self._read_job_meta(meta_path)
+            latest['running'] = False
+            if latest.get('cancel_requested'):
+                latest['cancelled'] = True
+                latest['failed'] = False
+                latest['error'] = latest.get('error') or _('Import cancelled by user.')
+            elif return_code == 0:
+                latest['progress'] = 100
+                latest['failed'] = False
+                latest['cancelled'] = False
+                latest['error'] = ''
+            else:
+                latest['failed'] = True
+                latest['cancelled'] = False
+                latest['error'] = _('Import process exited with code %(code)s.') % {'code': return_code}
+            self._write_job_meta(meta_path, latest)
+
+        thread = threading.Thread(target=_monitor, daemon=True)
+        thread.start()
+        return job_id
+
+    @staticmethod
+    def _is_process_alive(pid):
+        if not pid:
+            return False
+        try:
+            os.kill(int(pid), 0)
+        except (OSError, ValueError, TypeError):
+            return False
+        return True
+
+
+class ProblemImportPolygonStatus(PermissionRequiredMixin, View):
+    permission_required = 'judge.add_problem'
+    _job_dir = Path('/tmp/polygon-import-jobs')
+
+    def get(self, request, job_id, *args, **kwargs):
+        log_path = self._job_dir / f"{job_id}.log"
+        meta_path = self._job_dir / f"{job_id}.json"
+        if not meta_path.exists():
+            return JsonResponse({'error': 'Job not found'}, status=404)
+
+        meta = {}
+        try:
+            meta = json.loads(meta_path.read_text(encoding='utf-8'))
+        except json.JSONDecodeError:
+            pass
+
+        owner_session_key = meta.get('owner_session_key')
+        if owner_session_key and owner_session_key != request.session.session_key and not request.user.is_superuser:
+            return JsonResponse({'error': 'Forbidden'}, status=403)
+
+        logs = ''
+        if log_path.exists():
+            logs = log_path.read_text(encoding='utf-8')
+
+        parsed_progress = ProblemImportPolygon._extract_progress(logs)
+        if parsed_progress > int(meta.get('progress', 0)):
+            meta['progress'] = parsed_progress
+            meta_path.write_text(json.dumps(meta), encoding='utf-8')
+
+        problem_code = meta.get('problem_code')
+        problem_url = ''
+        if problem_code and not meta.get('running'):
+            if Problem.objects.filter(code=problem_code).exists():
+                problem_url = reverse('problem_detail', args=[problem_code])
+
+        return JsonResponse({
+            'job_id': job_id,
+            'running': bool(meta.get('running')),
+            'progress': int(meta.get('progress', 0)),
+            'failed': bool(meta.get('failed')),
+            'cancelled': bool(meta.get('cancelled')),
+            'error': meta.get('error', ''),
+            'logs': logs,
+            'problem_code': problem_code,
+            'problem_url': problem_url,
+        })
+
+
+class ProblemImportPolygonCancel(PermissionRequiredMixin, View):
+    permission_required = 'judge.add_problem'
+    _job_dir = Path('/tmp/polygon-import-jobs')
+
+    def post(self, request, job_id, *args, **kwargs):
+        log_path = self._job_dir / f"{job_id}.log"
+        meta_path = self._job_dir / f"{job_id}.json"
+        if not meta_path.exists():
+            return JsonResponse({'error': 'Job not found'}, status=404)
+
+        try:
+            meta = json.loads(meta_path.read_text(encoding='utf-8'))
+        except json.JSONDecodeError:
+            return JsonResponse({'error': 'Invalid job metadata'}, status=400)
+
+        owner_session_key = meta.get('owner_session_key')
+        if owner_session_key and owner_session_key != request.session.session_key and not request.user.is_superuser:
+            return JsonResponse({'error': 'Forbidden'}, status=403)
+
+        if not meta.get('running'):
+            return JsonResponse({
+                'ok': True,
+                'running': False,
+                'message': _('Import is already finished.'),
+            })
+
+        meta['cancel_requested'] = True
+        meta['error'] = _('Import cancelled by user.')
+        pid = meta.get('pid')
+        if pid and ProblemImportPolygon._is_process_alive(pid):
+            try:
+                os.killpg(os.getpgid(int(pid)), signal.SIGTERM)
+            except OSError:
+                try:
+                    os.kill(int(pid), signal.SIGTERM)
+                except OSError:
+                    pass
+
+        if log_path.exists():
+            with open(log_path, 'a', encoding='utf-8') as f:
+                f.write('\n[100%] Import cancelled by user.\n')
+
+        meta_path.write_text(json.dumps(meta), encoding='utf-8')
+        return JsonResponse({
+            'ok': True,
+            'running': True,
+            'message': _('Cancellation requested.'),
+        })
 
 class ProblemEdit(ProblemMixin, TitleMixin, UpdateView):
     template_name = 'problem/editor.html'

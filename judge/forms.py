@@ -391,7 +391,7 @@ class TagProblemCreateForm(Form):
     problem_url = forms.URLField(max_length=200,
                                  label=_('Problem URL'),
                                  help_text=_('Full URL to the problem, '
-                                             'e.g. https://oj.vnoi.info/problem/post'),
+                                             'e.g. https://example.com/problem/problem-slug'),
                                  widget=forms.TextInput(attrs={'style': 'width:100%'}))
 
     def __init__(self, problem_url=None, *args, **kwargs):
@@ -408,6 +408,24 @@ class TagProblemAssignForm(Form):
     tags = MultipleChoiceField(
         required=True,
         choices=get_choices,
+    )
+
+
+class PolygonImportForm(Form):
+    problem = CharField(
+        max_length=300,
+        label=_('Polygon problem URL or ID'),
+        widget=forms.TextInput(attrs={'style': 'width: 100%;'}),
+    )
+    api_key = CharField(
+        required=False,
+        label=_('Polygon API key'),
+        widget=forms.TextInput(attrs={'style': 'width: 100%;', 'autocomplete': 'off'}),
+    )
+    api_secret = CharField(
+        required=False,
+        label=_('Polygon API secret'),
+        widget=forms.PasswordInput(render_value=True, attrs={'style': 'width: 100%;', 'autocomplete': 'new-password'}),
     )
 
 

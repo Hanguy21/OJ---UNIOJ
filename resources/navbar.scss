@@ -108,6 +108,36 @@ nav {
                 }
             }
 
+            // Square site logo: centered with even padding (default branch uses .site-header-logo)
+            &.nav-site-logo > a {
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                padding: 4px 12px !important;
+                height: auto !important;
+                min-height: 52px;
+                box-sizing: border-box;
+
+                &:hover {
+                    padding: 4px 12px !important;
+                }
+
+                .site-header-logo {
+                    width: 48px;
+                    height: 48px;
+                    max-width: 48px;
+                    max-height: 48px;
+                    flex-shrink: 0;
+                    object-fit: contain;
+                    object-position: center;
+                    display: block;
+                    padding: 0 !important;
+                    margin: 0;
+                    border: none;
+                    vertical-align: middle;
+                }
+            }
+
             a, button {
                 text-decoration: none;
                 vertical-align: middle;
@@ -188,6 +218,10 @@ nav {
                 padding-top: 0;
                 padding-bottom: 0;
                 background: transparent;
+            }
+
+            &.home-nav-element.nav-site-logo a:hover {
+                padding: 4px 12px !important;
             }
         }
     }

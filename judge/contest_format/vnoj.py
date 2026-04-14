@@ -46,7 +46,7 @@ GROUP BY cp.id
 
 @register_contest_format('vnoj')
 class VNOJContestFormat(DefaultContestFormat):
-    name = gettext_lazy('VNOJ')
+    name = gettext_lazy('UNIOJ')
     config_defaults = {'penalty': 5, 'LSO': False}
     config_validators = {'penalty': lambda x: x >= 0, 'LSO': lambda x: isinstance(x, bool)}
     """
@@ -61,7 +61,7 @@ class VNOJContestFormat(DefaultContestFormat):
             return
 
         if not isinstance(config, dict):
-            raise ValidationError('VNOJ-styled contest expects no config or dict as config')
+            raise ValidationError('UNIOJ-styled contest expects no config or dict as config')
 
         for key, value in config.items():
             if key not in cls.config_defaults:

@@ -1,17 +1,21 @@
 # coding=utf-8
 import re
+from types import SimpleNamespace
 
 from django import forms
 from django.conf import settings
 from django.contrib.auth.models import User
+from django.contrib.sites.shortcuts import get_current_site
 from django.contrib.auth.password_validation import get_default_password_validators
 from django.db import transaction
 from django.forms import ChoiceField, ModelChoiceField
 from django.shortcuts import render
 from django.utils.translation import gettext, gettext_lazy as _, ngettext
+from registration import signals
 from registration.backends.default.views import (ActivationView as OldActivationView,
                                                  RegistrationView as OldRegistrationView)
 from registration.forms import RegistrationForm
+from registration.users import UserModel
 from sortedm2m.forms import SortedMultipleChoiceField
 
 from judge.models import Language, Organization, Profile, TIMEZONE
@@ -84,7 +88,23 @@ class RegistrationView(OldRegistrationView):
         # (sending emails can cause error, resulting in an unclean database)
         # See https://github.com/macropin/django-registration/blob/v2.9/registration/models.py#L188-L193
 
-        user = super(RegistrationView, self).register(form)
+        site = get_current_site(self.request)
+        # Use settings branding in outgoing mail without mutating django.contrib.sites.Site.
+        email_site = SimpleNamespace(domain=site.domain, name=settings.SITE_NAME)
+
+        if hasattr(form, 'save'):
+            new_user_instance = form.save(commit=False)
+        else:
+            new_user_instance = UserModel().objects.create_user(**form.cleaned_data)
+
+        user = self.registration_profile.objects.create_inactive_user(
+            new_user=new_user_instance,
+            site=email_site,
+            send_email=self.SEND_ACTIVATION_EMAIL,
+            request=self.request,
+        )
+        signals.user_registered.send(sender=self.__class__, user=user, request=self.request)
+
         profile, _ = Profile.objects.get_or_create(user=user, defaults={
             'language': Language.get_default_language(),
         })

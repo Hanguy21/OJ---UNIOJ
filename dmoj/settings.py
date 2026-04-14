@@ -122,7 +122,7 @@ OJ_PROBLEM_PRESET = [
     {
         'regex': r'^https://oj\.vnoi\.info/problem/(?P<codename>\w+)$',
         'codename': 'VNOJ_%s',
-        'judge': 'VNOJ',
+        'judge': 'UNIOJ',
     },
     {
         'regex': r'^https://open\.kattis\.com/problems/(?P<codename>\w+)$',
@@ -141,7 +141,7 @@ OJ_LIST = [
     ('Codeforces', 'Codeforces'),
     ('CodeforcesGym', 'Codeforces (Gym)'),
     ('Kattis', 'Kattis'),
-    ('VNOJ', 'VNOJ'),
+    ('VNOJ', 'UNIOJ'),
 ]
 
 OJ_REQUESTS_TIMEOUT = 5  # in seconds

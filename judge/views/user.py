@@ -681,6 +681,10 @@ class CustomPasswordResetView(PasswordResetView):
 
         self.extra_email_context = {
             'misc_config': request.misc_config,
+            'SITE_NAME': settings.SITE_NAME,
+            'SITE_LONG_NAME': settings.SITE_LONG_NAME,
+            # Override django.contrib.sites name so email copy matches branding (not only django_site row).
+            'site_name': settings.SITE_NAME,
         }
 
         return super().post(request, *args, **kwargs)

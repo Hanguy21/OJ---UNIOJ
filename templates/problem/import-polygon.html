@@ -1,0 +1,233 @@
+{% extends "common-content.html" %}
+
+{% block media %}
+    <style>
+        .polygon-import-wrap {
+            max-width: 900px;
+            margin: 0 auto;
+        }
+        .polygon-import-card {
+            border: 1px solid #d5d5d5;
+            border-radius: 8px;
+            background: #fff;
+            padding: 18px;
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+        }
+        .polygon-import-note {
+            font-size: 0.93em;
+            color: #555;
+            margin-top: 8px;
+        }
+        .polygon-import-actions {
+            display: flex;
+            justify-content: flex-end;
+            margin-top: 12px;
+        }
+        .polygon-inline-help {
+            margin-top: 10px;
+            padding: 10px 12px;
+            border-left: 3px solid #2c7be5;
+            background: #f6f9ff;
+        }
+        .polygon-progress-wrap {
+            margin-top: 16px;
+        }
+        .polygon-progress-bar {
+            height: 10px;
+            background: #e7ecf3;
+            border-radius: 999px;
+            overflow: hidden;
+        }
+        .polygon-progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #2c7be5, #00a2ff);
+        }
+        .polygon-log-box {
+            margin-top: 10px;
+            background: #0f1720;
+            color: #d8e0ea;
+            border-radius: 6px;
+            padding: 12px;
+            font-family: monospace;
+            white-space: pre-wrap;
+            max-height: 320px;
+            overflow: auto;
+        }
+        .polygon-status-ok {
+            color: #1d7f39;
+        }
+        .polygon-status-failed {
+            color: #b82525;
+        }
+        .polygon-status-cancelled {
+            color: #875900;
+        }
+        .polygon-control-row {
+            margin-top: 10px;
+            display: flex;
+            justify-content: flex-end;
+            gap: 8px;
+        }
+    </style>
+{% endblock %}
+
+{% block title_ruler %}{% endblock %}
+
+{% block title_row %}
+    {% set tab = 'import_polygon' %}
+    {% include "problem/problem-list-tabs.html" %}
+{% endblock %}
+
+{% block body %}
+    <div class="polygon-import-wrap">
+        <div class="polygon-import-card">
+            <h3 style="margin-top: 0;">{{ _('Import Polygon problem') }}</h3>
+            <div class="polygon-inline-help">
+                {{ _('Enter a Polygon URL or problem ID. Authors/curators are auto-set to admin + your account. API key/secret are stored only in your current web session.') }}
+            </div>
+
+            <form id="polygon-import-form" action="" method="post" class="form-area" style="margin-top: 14px;">
+                {% csrf_token %}
+                <table class="django-as-table">{{ form.as_table() }}</table>
+                <p class="polygon-import-note">
+                    {{ _('The system auto-checks Linux package availability. If missing, it auto-builds and polls until ready.') }}
+                </p>
+                <div class="polygon-import-actions">
+                    <button id="polygon-import-btn" type="submit" class="button">{{ _('Run import') }}</button>
+                </div>
+            </form>
+
+            {% if job_id %}
+                <div class="polygon-progress-wrap">
+                    <div style="display:flex; justify-content:space-between; margin-bottom:6px;">
+                        <strong>{{ _('Import progress') }}</strong>
+                        <span id="polygon-progress-text">0%</span>
+                    </div>
+                    <div class="polygon-progress-bar">
+                        <div id="polygon-progress-fill" class="polygon-progress-fill" style="width: 0%;"></div>
+                    </div>
+                    <p id="polygon-status-text" class="polygon-import-note" style="margin-top:8px;">
+                        {{ _('Import is running...') }}
+                    </p>
+                    <div class="polygon-control-row">
+                        <button id="polygon-cancel-btn" type="button" class="button">{{ _('Cancel import') }}</button>
+                    </div>
+                    <p id="polygon-problem-link" class="polygon-import-note" style="display:none;"></p>
+                    <div id="polygon-log-box" class="polygon-log-box"></div>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+
+    {% if job_id %}
+        <script>
+            (function () {
+                var statusUrl = "{{ url('problem_import_polygon_status', job_id) }}";
+                var cancelUrl = "{{ url('problem_import_polygon_cancel', job_id) }}";
+                var logBox = document.getElementById('polygon-log-box');
+                var progressFill = document.getElementById('polygon-progress-fill');
+                var progressText = document.getElementById('polygon-progress-text');
+                var statusText = document.getElementById('polygon-status-text');
+                var problemLink = document.getElementById('polygon-problem-link');
+                var cancelBtn = document.getElementById('polygon-cancel-btn');
+                var importBtn = document.getElementById('polygon-import-btn');
+                var pollingStopped = false;
+
+                function setStatus(text, klass) {
+                    statusText.className = 'polygon-import-note ' + (klass || '');
+                    statusText.textContent = text;
+                }
+
+                function getCookie(name) {
+                    var match = document.cookie.match(new RegExp('(^| )' + name + '=([^;]+)'));
+                    return match ? decodeURIComponent(match[2]) : '';
+                }
+
+                function disableCancelButton() {
+                    if (!cancelBtn) {
+                        return;
+                    }
+                    cancelBtn.disabled = true;
+                    cancelBtn.textContent = "{{ _('Cancel requested') }}";
+                }
+
+                function setImportButtonState(disabled, text) {
+                    if (!importBtn) {
+                        return;
+                    }
+                    importBtn.disabled = !!disabled;
+                    importBtn.textContent = text || "{{ _('Run import') }}";
+                }
+
+                setImportButtonState(true, "{{ _('Import is running...') }}");
+
+                if (cancelBtn) {
+                    cancelBtn.addEventListener('click', function () {
+                        disableCancelButton();
+                        setStatus("{{ _('Cancelling import...') }}", 'polygon-status-cancelled');
+                        setImportButtonState(true, "{{ _('Import is running...') }}");
+                        fetch(cancelUrl, {
+                            method: 'POST',
+                            credentials: 'same-origin',
+                            headers: {'X-CSRFToken': getCookie('csrftoken')}
+                        }).catch(function () {
+                            setStatus("{{ _('Failed to send cancel request.') }}", 'polygon-status-failed');
+                        });
+                    });
+                }
+
+                function poll() {
+                    if (pollingStopped) {
+                        return;
+                    }
+                    fetch(statusUrl, {credentials: 'same-origin'})
+                        .then(function (resp) { return resp.json(); })
+                        .then(function (data) {
+                            var progress = Math.max(0, Math.min(100, data.progress || 0));
+                            progressFill.style.width = progress + '%';
+                            progressText.textContent = progress + '%';
+                            logBox.textContent = data.logs || '';
+                            logBox.scrollTop = logBox.scrollHeight;
+
+                            if (data.problem_url && data.problem_code) {
+                                problemLink.style.display = '';
+                                problemLink.innerHTML = "{{ _('Problem:') }} " +
+                                    '<a href="' + data.problem_url + '">' + data.problem_code + '</a>';
+                            }
+
+                            if (data.running) {
+                                setStatus("{{ _('Import is running...') }}");
+                                setImportButtonState(true, "{{ _('Import is running...') }}");
+                                setTimeout(poll, 2000);
+                                return;
+                            }
+
+                            if (cancelBtn) {
+                                cancelBtn.style.display = 'none';
+                            }
+                            pollingStopped = true;
+
+                            if (data.cancelled) {
+                                setImportButtonState(false, "{{ _('Run import') }}");
+                                setStatus("{{ _('Import has been cancelled.') }}", 'polygon-status-cancelled');
+                                return;
+                            }
+                            if (data.failed) {
+                                setImportButtonState(false, "{{ _('Run import') }}");
+                                setStatus("{{ _('Import failed:') }} " + (data.error || ''), 'polygon-status-failed');
+                                return;
+                            }
+                            setImportButtonState(false, "{{ _('Run import') }}");
+                            setStatus("{{ _('Import completed successfully.') }}", 'polygon-status-ok');
+                        })
+                        .catch(function () {
+                            setStatus("{{ _('Cannot load live logs right now. Retrying...') }}", 'polygon-status-failed');
+                            setTimeout(poll, 3000);
+                        });
+                }
+
+                poll();
+            })();
+        </script>
+    {% endif %}
+{% endblock %}

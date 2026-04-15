@@ -1,0 +1,18 @@
+{# Blog post vote rail (used in sidebar on post detail page) #}
+<div class="vote blog-post-vote-rail">
+    {% if logged_in %}
+        <a href="javascript:blog_upvote({{ post.id }})"
+           class="upvote-link fa fa-chevron-up fa-fw{% if post.vote_score == 1 %} voted{% endif %}"></a>
+    {% else %}
+        <a href="javascript:alert('{{ _('Please log in to vote')|escapejs }}')" title="{{ _('Please log in to vote') }}"
+           class="upvote-link fa fa-chevron-up fa-fw"></a>
+    {% endif %}
+    <div id="post-score" class="comment-score">{{ post.score }}</div>
+    {% if logged_in %}
+        <a href="javascript:blog_downvote({{ post.id }})"
+           class="downvote-link fa fa-chevron-down fa-fw{% if post.vote_score == -1 %} voted{% endif %}"></a>
+    {% else %}
+        <a href="javascript:alert('{{ _('Please log in to vote')|escapejs }}')" title="{{ _('Please log in to vote') }}"
+           class="downvote-link fa fa-chevron-down fa-fw"></a>
+    {% endif %}
+</div>

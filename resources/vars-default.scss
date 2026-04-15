@@ -4,22 +4,23 @@
 $is_light_theme: true;
 
 $color_primary0: #fff;
-$color_primary5: #f8f8f8;   // light background
-$color_primary10: #eee;     // background
-$color_primary25: #ccc;     // border
-$color_primary33: #aaa;     // widget
-$color_primary50: #808080;
-$color_primary66: #555;     // tabs
-$color_primary75: #231f20;  // widget
-$color_primary90: #111;
-$color_primary100: #000;
+$color_primary5: #f4f3f0;
+$color_primary10: #edece8;
+$color_primary25: #e6e4dd;
+$color_primary33: #c9c6bd;
+$color_primary50: #6b6a62;
+$color_primary66: #4a4840;
+$color_primary75: #3d3c37;
+$color_primary90: #2a2924;
+$color_primary100: #1d1c16;
 
-$color_link50: #5b80b9;     // default (title)
-$color_link75: #1958c1;     // default
-$color_link100: #0645ad;    // hover
-$color_link200: #faa700;    // active
+$color_link50: #6b6a62;
+$color_link75: #3a3934;
+$color_link100: #d97757;
+$color_link200: #a85f49;
 
-$color_pageBg: color.adjust($color_primary5, $lightness: 10%);
+// Slightly warmer than pure white cards so sidebars / panels read as layered
+$color_pageBg: #f4f1ea;
 
 // custom one-off colours
 $color_contest_ranking_disqualified: #ffa8a8;
@@ -35,15 +36,15 @@ $color_rating_grandmaster: #ff0000;
 
 $color_select2_search_dropdown: $color_primary0;
 
-$color_user_submission_activity0: #ddd;
-$color_user_submission_activity1: #9be9a8;
-$color_user_submission_activity2: #40c463;
-$color_user_submission_activity3: #2f9c4c;
-$color_user_submission_activity4: #216e39;
+$color_user_submission_activity0: #e6e4dd;
+$color_user_submission_activity1: #d4e8df;
+$color_user_submission_activity2: #a8cfb8;
+$color_user_submission_activity3: #6bab8c;
+$color_user_submission_activity4: #3d7a5f;
 
-$color_problem_submit_select2: #757575;
+$color_problem_submit_select2: #6b6a62;
 
-$color_voted_mark: #0000ff;
+$color_voted_mark: #d97757;
 
 $path_to_root: '.';     // relative path from style.css to STATIC_ROOT
 

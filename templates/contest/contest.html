@@ -39,6 +39,7 @@
 {% endblock %}
 
 {% block body %}
+    <div class="contest-detail-page">
     <div id="banner">
         <a href="https://www.timeanddate.com/worldclock/fixedtime.html?msg={{ contest.name|urlquote('') }}&amp;iso=
                 {{- (contest.start_time if contest.start_time >= now else contest.end_time)|utc|date('Y-m-d\TH:i:s') }}" class="date">
@@ -350,6 +351,7 @@
     {% endif %}
 
     <div style="clear: both;"></div>
+    </div>
 {% endblock %}
 
 {% block description_end %}{% endblock %}

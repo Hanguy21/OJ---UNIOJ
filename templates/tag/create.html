@@ -9,23 +9,31 @@
     <link rel="stylesheet" type="text/css" href="{{ static('ui_form.css') }}">
 {% endblock %}
 
+{% block title_ruler %}{% endblock %}
+
+{% block title_row %}
+    {% set tab = 'create' %}
+    {% include "problem/problem-list-tabs.html" %}
+{% endblock %}
+
 {% block body %}
-    <div class="alert alert-warning alert-dismissable">
-        <a class="close">x</a>
-        <b>{{ _('Creating new problem can take longer than usual!') }}</b>
-        <br>
-        {{ _('Due to API requests and cache optimization, creating problem can take longer than usual.') }}
-        <br>{{ _('If no problem is created after 2 to 3 minutes, please open a ticket, or contact the admin for further information.') }}
-    </div>
-    <div>
-        <form action="" method="post" class="form-area" style="display: flex; justify-content: center; flex-direction: column;">
+    <div class="problem-admin-page create-problem-page">
+        <div class="alert alert-warning alert-dismissable problem-admin-alert">
+            <a class="close">x</a>
+            <b>{{ _('Creating new problem can take longer than usual!') }}</b>
+            <br>
+            {{ _('Due to API requests and cache optimization, creating problem can take longer than usual.') }}
+            <br>{{ _('If no problem is created after 2 to 3 minutes, please open a ticket, or contact the admin for further information.') }}
+        </div>
+
+        <form action="" method="post" class="form-area problem-admin-card">
             {% csrf_token %}
+            <h3 class="problem-admin-title">{{ _('Creating new problem') }}</h3>
             <table class="django-as-table">{{ form.as_table() }}</table>
             <hr>
-            <table>
-                <tr><td style="float: left;">
-                <td style="float: right;"><input type="submit" value="{{ _('Create') }}" class="button"></td></tr>
-            </table>
+            <div class="problem-admin-actions">
+                <input type="submit" value="{{ _('Create') }}" class="button">
+            </div>
         </form>
     </div>
 {% endblock %}

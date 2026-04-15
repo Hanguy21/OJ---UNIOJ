@@ -447,8 +447,16 @@ class OrganizationForm(ModelForm):
 class CustomAuthenticationForm(AuthenticationForm):
     def __init__(self, *args, **kwargs):
         super(CustomAuthenticationForm, self).__init__(*args, **kwargs)
-        self.fields['username'].widget.attrs.update({'placeholder': _('Username')})
-        self.fields['password'].widget.attrs.update({'placeholder': _('Password')})
+        self.fields['username'].widget.attrs.update({
+            'placeholder': _('Your username...'),
+            'class': 'login-field',
+            'autocomplete': 'username',
+        })
+        self.fields['password'].widget.attrs.update({
+            'placeholder': _('Your password...'),
+            'class': 'login-field',
+            'autocomplete': 'current-password',
+        })
 
         self.has_google_auth = self._has_social_auth('GOOGLE_OAUTH2')
         self.has_facebook_auth = self._has_social_auth('FACEBOOK')

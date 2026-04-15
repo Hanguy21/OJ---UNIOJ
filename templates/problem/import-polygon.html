@@ -1,74 +1,6 @@
 {% extends "common-content.html" %}
 
 {% block media %}
-    <style>
-        .polygon-import-wrap {
-            max-width: 900px;
-            margin: 0 auto;
-        }
-        .polygon-import-card {
-            border: 1px solid #d5d5d5;
-            border-radius: 8px;
-            background: #fff;
-            padding: 18px;
-            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
-        }
-        .polygon-import-note {
-            font-size: 0.93em;
-            color: #555;
-            margin-top: 8px;
-        }
-        .polygon-import-actions {
-            display: flex;
-            justify-content: flex-end;
-            margin-top: 12px;
-        }
-        .polygon-inline-help {
-            margin-top: 10px;
-            padding: 10px 12px;
-            border-left: 3px solid #2c7be5;
-            background: #f6f9ff;
-        }
-        .polygon-progress-wrap {
-            margin-top: 16px;
-        }
-        .polygon-progress-bar {
-            height: 10px;
-            background: #e7ecf3;
-            border-radius: 999px;
-            overflow: hidden;
-        }
-        .polygon-progress-fill {
-            height: 100%;
-            background: linear-gradient(90deg, #2c7be5, #00a2ff);
-        }
-        .polygon-log-box {
-            margin-top: 10px;
-            background: #0f1720;
-            color: #d8e0ea;
-            border-radius: 6px;
-            padding: 12px;
-            font-family: monospace;
-            white-space: pre-wrap;
-            max-height: 320px;
-            overflow: auto;
-        }
-        .polygon-status-ok {
-            color: #1d7f39;
-        }
-        .polygon-status-failed {
-            color: #b82525;
-        }
-        .polygon-status-cancelled {
-            color: #875900;
-        }
-        .polygon-control-row {
-            margin-top: 10px;
-            display: flex;
-            justify-content: flex-end;
-            gap: 8px;
-        }
-    </style>
 {% endblock %}
 
 {% block title_ruler %}{% endblock %}
@@ -79,14 +11,15 @@
 {% endblock %}
 
 {% block body %}
+    <div class="problem-admin-page polygon-import-page">
     <div class="polygon-import-wrap">
         <div class="polygon-import-card">
-            <h3 style="margin-top: 0;">{{ _('Import Polygon problem') }}</h3>
+            <h3 class="problem-admin-title">{{ _('Import Polygon problem') }}</h3>
             <div class="polygon-inline-help">
                 {{ _('Enter a Polygon URL or problem ID. Authors/curators are auto-set to admin + your account. API key/secret are stored only in your current web session.') }}
             </div>
 
-            <form id="polygon-import-form" action="" method="post" class="form-area" style="margin-top: 14px;">
+            <form id="polygon-import-form" action="" method="post" class="form-area problem-admin-card">
                 {% csrf_token %}
                 <table class="django-as-table">{{ form.as_table() }}</table>
                 <p class="polygon-import-note">
@@ -117,6 +50,7 @@
                 </div>
             {% endif %}
         </div>
+    </div>
     </div>
 
     {% if job_id %}

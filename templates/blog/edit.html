@@ -24,23 +24,22 @@
 {% endblock %}
 
 {% block body %}
-<div>
+<div class="content-description blog-editor-page">
     {% if edit and request.user.is_staff %}
-        <div class="alert alert-warning alert-dismissable">
+        <div class="alert alert-warning alert-dismissable blog-editor-alert">
             <a class="close">x</a>
             <a href="{{ url('admin:judge_blogpost_change', object.id) }}">{{ _('Edit blog post in admin panel for more options') }}</a>
         </div>
     {% elif not edit %}
-        <div class="alert alert-warning">
+        <div class="alert alert-warning blog-editor-alert">
             {{ (_('Please read the [guidelines][0] before creating a new blog post.') + '\n\n  [0]: /about/blog/')|markdown('blog', strip_paragraphs=True) }}
         </div>
     {% endif %}
-    <form action="" method="post" class="form-area" style="display: flex; justify-content: center; flex-direction: column;">
+    <form action="" method="post" class="form-area blog-form-card">
         {% csrf_token %}
         <table class="django-as-table">{{ form.as_table() }}</table>
-        <hr>
-        <div style="display: flex; justify-content: flex-end;">
-            <input type="submit" value="{% if edit %} {{ _('Update') }} {% else %} {{ _('Create') }} {% endif %}" class="button">
+        <div class="blog-form-actions">
+            <input type="submit" value="{% if edit %}{{ _('Update') }}{% else %}{{ _('Create') }}{% endif %}" class="button">
         </div>
     </form>
 </div>

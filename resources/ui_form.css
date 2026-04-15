@@ -1,7 +1,9 @@
 .helptext {
-    font-size: 15px;
-    color: #999;
-    border-width: 0 0 1px 0;
+    display: block;
+    font-size: 13px;
+    color: #5f6f86;
+    margin-top: 4px;
+    line-height: 1.4;
 }
 .helptext::before {
     font-family: FontAwesome;
@@ -13,18 +15,32 @@
     font-size: 15px;
 }
 .django-as-table {
-    border-collapse:collapse;
+    border-collapse: collapse;
+    width: 100%;
 }
-.django-as-table th, td {
-    padding-bottom: 10px;
+.django-as-table th, .django-as-table td {
+    padding: 7px 8px;
+    vertical-align: top;
 }
 .django-as-table th {
-    max-width: 10em;
-    width: 10em;
+    max-width: 12em;
+    width: 12em;
+    text-align: left;
+    font-weight: 600;
+    color: #1d2b45;
 }
 
-.django-as-table input:not([type='checkbox']) {
-    width: 30em;
+.django-as-table input:not([type='checkbox']),
+.django-as-table select,
+.django-as-table textarea {
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+    border-radius: 10px;
+}
+
+.django-as-table textarea {
+    min-height: 110px;
 }
 
 .errorlist {

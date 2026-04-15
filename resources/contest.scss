@@ -142,7 +142,7 @@
     }
 
     a.contest-sort-link {
-        color: $color_primary0;
+        color: inherit;
     }
 }
 
@@ -153,6 +153,162 @@
     font-weight: 600;
     margin-right: 0.45em;
     position: relative;
+}
+
+.contest-tag--hidden {
+    background: $color_primary75 !important;
+    color: $color_primary0 !important;
+    box-shadow: none;
+    border-radius: 999px;
+    padding: 0.2em 0.55em;
+}
+
+.contest-tag--private {
+    background: $color_primary50 !important;
+    color: $color_primary0 !important;
+    box-shadow: none;
+    border-radius: 999px;
+    padding: 0.2em 0.55em;
+}
+
+.contest-tag--org {
+    background: $color_primary10 !important;
+    box-shadow: none;
+    border-radius: 999px;
+    padding: 0.2em 0.55em;
+
+    a {
+        color: $color_primary100 !important;
+        text-decoration: none;
+
+        &:hover {
+            text-decoration: underline;
+        }
+    }
+}
+
+.contest-tag--rated {
+    background: linear-gradient(180deg, #ea6a2a 0%, #c94f18 100%) !important;
+    color: #fff !important;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
+    border-radius: 999px;
+    padding: 0.2em 0.55em;
+}
+
+// Contest list hub (list tab)
+.contest-hub-page {
+    max-width: 1080px;
+    margin: 0 auto 1.5em;
+    padding: 0 4px 8px;
+    box-sizing: border-box;
+
+    h4 {
+        font-family: $sans_fonts;
+        font-size: 1.05em;
+        font-weight: 700;
+        color: var(--theme-text);
+        margin: 1.35em 0 10px;
+        padding-bottom: 6px;
+        border-bottom: 1px solid var(--theme-border);
+    }
+
+    h4:first-of-type {
+        margin-top: 0.25em;
+    }
+
+    .contest-list.table {
+        border-collapse: separate;
+        border-spacing: 0;
+        border: 1px solid var(--theme-border);
+        border-radius: 12px;
+        overflow: hidden;
+        background: var(--theme-card);
+        box-shadow: var(--theme-shadow);
+    }
+
+    // Override global `.table` dark cell borders — one light frame + light dividers
+    .contest-list.table th,
+    .contest-list.table td {
+        border-color: var(--theme-border) !important;
+    }
+
+    .contest-list.table thead th {
+        border-top: none;
+    }
+
+    .contest-list.table tbody tr:last-child td {
+        border-bottom: none;
+    }
+
+    // Match rounded outer border (avoids header fill “eating” corners)
+    .contest-list thead th:first-child {
+        border-top-left-radius: 11px;
+    }
+
+    .contest-list thead th:last-child {
+        border-top-right-radius: 11px;
+    }
+
+    .contest-list tbody tr:last-child td:first-child {
+        border-bottom-left-radius: 11px;
+    }
+
+    .contest-list tbody tr:last-child td:last-child {
+        border-bottom-right-radius: 11px;
+    }
+
+    .contest-list thead th {
+        background: var(--theme-head-bg);
+        color: var(--theme-text);
+        font-family: $sans_fonts;
+        font-weight: 700;
+        font-size: 0.88em;
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
+        border-bottom: 1px solid var(--theme-border);
+        padding: 10px 12px;
+    }
+
+    .contest-list tbody tr {
+        transition: background 0.15s ease;
+    }
+
+    .contest-list tbody tr:hover td {
+        background: var(--theme-row-hover);
+    }
+
+    .contest-list tbody td {
+        border-color: var(--theme-border);
+        vertical-align: middle;
+    }
+
+    .contest-block {
+        padding: 0.65em 0.75em 0.65em 0.85em;
+    }
+
+    .contest-list-title {
+        font-size: 1.05em;
+        font-weight: 700;
+    }
+
+    .participate-button.button {
+        border-radius: 10px;
+        min-width: 7.5em;
+        font-weight: 600;
+        box-shadow: 0 2px 6px rgba(29, 28, 22, 0.08);
+    }
+
+    > i {
+        display: block;
+        margin: 6px 0 4px;
+        padding: 14px 16px;
+        border: 1px dashed $color_primary33;
+        border-radius: 12px;
+        background: $color_primary5;
+        color: $color_primary50;
+        font-style: normal;
+        font-size: 0.95em;
+    }
 }
 
 .contest-list-title {
@@ -296,5 +452,134 @@ form.contest-join-pseudotab {
 
     .select2-selection__rendered {
         width: 260px !important;
+    }
+}
+
+// Contest detail (info tab) — cards, soft headers, corner-safe tables
+.contest-detail-page {
+    max-width: 1120px;
+    margin: 0 auto;
+    padding: 0 6px 28px;
+    box-sizing: border-box;
+
+    #banner {
+        border-radius: 14px;
+        border: 1px solid var(--theme-border);
+        background: var(--theme-card);
+        padding: 1.1em 1.25em;
+        margin-bottom: 1.25em;
+        color: var(--theme-text-muted);
+
+        a.date {
+            color: var(--theme-link);
+        }
+
+        #details,
+        #details ul {
+            color: var(--theme-text-muted);
+        }
+    }
+
+    .contest-problems,
+    .contest-clartifications {
+        margin-bottom: 1.75em;
+    }
+
+    .contest-problems h2,
+    .contest-clartifications h2 {
+        font-family: $sans_fonts;
+        font-size: 1.12em;
+        font-weight: 700;
+        color: var(--theme-text);
+        margin: 0 0 0.45em;
+        padding-bottom: 0.35em;
+        border-bottom: 1px solid var(--theme-border);
+    }
+
+    .contest-problems table.table.striped,
+    .contest-clartifications table.table {
+        border-collapse: separate;
+        border-spacing: 0;
+        border: 1px solid var(--theme-border);
+        border-radius: 12px;
+        overflow: hidden;
+        box-shadow: var(--theme-shadow);
+        background: var(--theme-card);
+        margin: 10px 0 14px;
+    }
+
+    .contest-problems table.table th,
+    .contest-problems table.table td,
+    .contest-clartifications table.table th,
+    .contest-clartifications table.table td {
+        border-color: var(--theme-border) !important;
+    }
+
+    .contest-problems table.table thead th,
+    .contest-clartifications table.table thead th {
+        border-top: none;
+    }
+
+    .contest-problems table.table tbody tr:last-child td,
+    .contest-clartifications table.table tbody tr:last-child td {
+        border-bottom: none;
+    }
+
+    .contest-problems table.table thead th:first-child,
+    .contest-clartifications table.table thead th:first-child {
+        border-top-left-radius: 11px;
+    }
+
+    .contest-problems table.table thead th:last-child,
+    .contest-clartifications table.table thead th:last-child {
+        border-top-right-radius: 11px;
+    }
+
+    .contest-problems table.table tbody tr:last-child td:first-child,
+    .contest-clartifications table.table tbody tr:last-child td:first-child {
+        border-bottom-left-radius: 11px;
+    }
+
+    .contest-problems table.table tbody tr:last-child td:last-child,
+    .contest-clartifications table.table tbody tr:last-child td:last-child {
+        border-bottom-right-radius: 11px;
+    }
+
+    .contest-problems table.table thead th,
+    .contest-clartifications table.table thead th {
+        background: var(--theme-head-bg);
+        color: var(--theme-text);
+        border-color: var(--theme-border);
+        border-bottom: 1px solid var(--theme-border);
+        font-family: $sans_fonts;
+        font-weight: 700;
+        font-size: 0.9em;
+    }
+
+    .contest-problems table.table td,
+    .contest-problems table.table th,
+    .contest-clartifications table.table td,
+    .contest-clartifications table.table th {
+        border-color: var(--theme-border);
+    }
+
+    .contest-problems table.table.striped tbody tr:nth-child(2n) td,
+    .contest-clartifications table.table tbody tr:nth-child(2n) td {
+        background: var(--theme-row-stripe);
+    }
+
+    .contest-problems table.table tbody tr:hover td,
+    .contest-clartifications table.table tbody tr:hover td {
+        background: var(--theme-row-hover);
+    }
+
+    .contest-problems .button,
+    .contest-clartifications .button {
+        border-radius: 10px;
+        font-weight: 600;
+    }
+
+    .content-description {
+        margin-top: 1.25em;
     }
 }

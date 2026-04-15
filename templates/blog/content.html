@@ -13,72 +13,68 @@
 {% endblock %}
 
 {% block title_row %}
-<div id="post-{{ post.id }}" style="display: flex; gap: 0.5em;">
-    <div class="vote">
-        {% if logged_in %}
-            <a href="javascript:blog_upvote({{ post.id }})"
-            class="upvote-link fa fa-chevron-up fa-fw{% if post.vote_score == 1 %} voted{% endif %}"></a>
-        {% else %}
-            <a href="javascript:alert('{{ _('Please log in to vote')|escapejs }}')" title="{{ _('Please log in to vote') }}"
-            class="upvote-link fa fa-chevron-up fa-fw"></a>
-        {% endif %}
-        <br>
-        <div id="post-score" class="comment-score">{{ post.score }}</div>
-        {% if logged_in %}
-            <a href="javascript:blog_downvote({{ post.id }})"
-            class="downvote-link fa fa-chevron-down fa-fw{% if post.vote_score == -1 %} voted{% endif %}"></a>
-        {% else %}
-            <a href="javascript:alert('{{ _('Please log in to vote')|escapejs }}')" title="{{ _('Please log in to vote') }}"
-            class="downvote-link fa fa-chevron-down fa-fw"></a>
-        {% endif %}
-    </div>
-    <div style="width: 100%;">
-        <h2 style="display:inline">
+<div class="blog-post-titlehead">
+    <div class="blog-post-title-row">
+        <h2 class="blog-post-heading">
             {% block content_title %}
                 {% if content_title %}{{ content_title }}{% else %}{{ title }}{% endif %}
             {% endblock %}
         </h2>
         {% if post.organization %}
-            <span class="organization-tag" style="display: inline;">
+            <span class="organization-tag blog-post-org-tag">
                 <a href="{{ post.organization.get_absolute_url() }}">
                     <i class="fa fa-lock"></i> {{ post.organization.name }}
                 </a>
             </span>
         {% endif %}
         {% if post.is_editable_by(request.user) %}
-            <div class="title-line-action">[<a href="{{ url('blog_post_edit', post.id, post.slug) }}">{{ _('Edit') }}</a>]</div>
+            <a class="blog-post-edit-link" href="{{ url('blog_post_edit', post.id, post.slug) }}">{{ _('Edit') }}</a>
         {% endif %}
-        <div class="time">
-            {% with authors=post.authors.all() %}
-                {%- if authors -%}
-                    <span class="post-authors">{{ link_users(authors) }}</span>
-                {%- endif -%}
-            {% endwith %}
-            <span class="post-time">
-                {% trans trimmed time=post.publish_on|date(_("N j, Y, g:i a")) %}
-                    posted on {{ time }}
-                {% endtrans %}
-            </span>
-        </div>
+    </div>
+    <div class="time blog-post-meta">
+        {% with authors=post.authors.all() %}
+            {%- if authors -%}
+                <span class="post-authors">{{ link_users(authors) }}</span>
+            {%- endif -%}
+        {% endwith %}
+        <span class="post-time">
+            {% trans trimmed time=post.publish_on|date(_("N j, Y, g:i a")) %}
+                posted on {{ time }}
+            {% endtrans %}
+        </span>
     </div>
 </div>
 {% endblock %}
 
 {% block body %}
-    <div class="post-full">
-        <div class="body content-description">
-            {% cache 86400 'post_content' post.id MATH_ENGINE %}
-                {{ post.content|markdown('blog', MATH_ENGINE)|reference|str|safe}}
-            {% endcache %}
+<div class="blog-post-page">
+    <div class="blog-post-layout">
+        <aside class="blog-post-sidebar" aria-label="{{ _('Post actions') }}">
+            <div class="blog-post-vote-card">
+                {% include "blog/post-vote-block.html" %}
+            </div>
+        </aside>
+        <div class="blog-post-main">
+            <div class="post-full blog-post-article">
+                <div class="body content-description">
+                    {% cache 86400 'post_content' post.id MATH_ENGINE %}
+                        {{ post.content|markdown('blog', MATH_ENGINE)|reference|str|safe}}
+                    {% endcache %}
+                </div>
+            </div>
+            <div class="blog-post-share">
+                <span class="social">
+                    {{ post_to_facebook(request, post, '<i class="fa fa-facebook-official"></i>') }}
+                    {{ post_to_twitter(request, SITE_NAME + ':', post, '<i class="fa fa-twitter"></i>') }}
+                </span>
+            </div>
+            <div class="blog-post-comments-wrap">
+                {% include "comments/list.html" %}
+            </div>
+            <div style="clear: both;"></div>
         </div>
     </div>
-    <hr>
-    <span class="social">
-        {{ post_to_facebook(request, post, '<i class="fa fa-facebook-official"></i>') }}
-        {{ post_to_twitter(request, SITE_NAME + ':', post, '<i class="fa fa-twitter"></i>') }}
-    </span>
-    {% include "comments/list.html" %}
-    <div style="clear: both;"></div>
+</div>
 {% endblock %}
 
 {% block bodyend %}

@@ -75,25 +75,25 @@
         </a>
         <span class="contest-tags">
             {% if not contest.is_visible %}
-                <span style="background-color: #000000; color: #ffffff" class="contest-tag">
+                <span class="contest-tag contest-tag--hidden">
                     <i class="fa fa-eye-slash"></i> {{ _('hidden') }}
                 </span>
             {% endif %}
             {% if contest.is_organization_private %}
                 {% for org in contest.organizations.all() %}
-                    <span style="background-color: #cccccc" class="contest-tag">
-                        <a href="{{ org.get_absolute_url() }}" style="color: #000000">
+                    <span class="contest-tag contest-tag--org">
+                        <a href="{{ org.get_absolute_url() }}">
                             <i class="fa fa-lock"></i> {{ org.name }}
                         </a>
                     </span>
                 {% endfor %}
             {% elif contest.is_private %}
-                <span style="background-color: #666666; color: #ffffff" class="contest-tag">
+                <span class="contest-tag contest-tag--private">
                     <i class="fa fa-lock"></i> {{ _('private') }}
                 </span>
             {% endif %}
             {% if contest.is_rated %}
-                <span style="background-color: #e54c14; color: #ffffff" class="contest-tag">
+                <span class="contest-tag contest-tag--rated">
                     <i class="fa fa-bar-chart"></i> {{ _('rated') }}
                 </span>
             {% endif %}
@@ -194,7 +194,7 @@
 {% endmacro %}
 
 {% block body %}
-    <div class="content-description">
+    <div class="content-description contest-hub-page">
         {% if active_participations %}
             <h4>{{ _('Active contests') }}</h4>
             <table class="contest-list table striped">

@@ -10,6 +10,7 @@
         <meta name="description" property="og:description" content="{{ meta_description }}">
     {% endif %}
     <meta id="viewport" name="viewport" content="width=device-width, initial-scale=1">
+    <script>try{if(localStorage.getItem("dmoj-ui-theme")==="sakura")document.documentElement.classList.add("theme-sakura");}catch(e){}</script>
     <!-- Favicons-->
     <link rel="apple-touch-icon" sizes="57x57" href="/apple-touch-icon-57x57.png">
     <link rel="apple-touch-icon" sizes="60x60" href="/apple-touch-icon-60x60.png">
@@ -64,7 +65,7 @@
           href="{{ DMOJ_SCHEME }}://{{ DMOJ_CANONICAL|default(site.domain) }}{{ request.get_full_path() }}">
     {% if request.user.is_impersonate %}
         <style>
-            #nav-container {
+            #navigation {
                 background: #893e89 !important;
             }
         </style>
@@ -92,6 +93,26 @@
             $(function () {
                 $('img.unveil').unveil(200);
             });
+        </script>
+        <script>
+            (function () {
+                function applyTheme(sakura) {
+                    document.documentElement.classList.toggle('theme-sakura', !!sakura);
+                    try {
+                        localStorage.setItem('dmoj-ui-theme', sakura ? 'sakura' : 'milk');
+                    } catch (e) {}
+                }
+                $(function () {
+                    var el = document.getElementById('theme-slider');
+                    if (!el) {
+                        return;
+                    }
+                    el.checked = document.documentElement.classList.contains('theme-sakura');
+                    el.addEventListener('change', function () {
+                        applyTheme(el.checked);
+                    });
+                });
+            })();
         </script>
     {% endcompress %}
     {% block js_media %}{% endblock %}
@@ -235,11 +256,10 @@
         <ul id="nav-list">
             <li class="home-nav-element nav-site-logo"><a href="{{ url('home') }}">{% include "site-logo-fragment.html" %}</a></li>
             <li class="home-nav-element"><span class="nav-divider"></span></li>
-            <li class="home-menu-item"><a href="{{ url('home') }}" class="nav-home">{{ _('Home') }}</a></li>
+            <li class="home-menu-item"><a href="{{ url('home') }}" class="nav-home"><i class="fa fa-home nav-item-icon" aria-hidden="true"></i><span class="nav-item-label">{{ _('Home') }}</span></a></li>
             {% for node in mptt_tree(nav_bar) recursive %}
                 <li>
-                    <a href="{{ node.path }}" class="nav-{{ node.key }}{% if node.key in nav_tab %} active{% endif %}">
-                        {{ _(node.label) }}
+                    <a href="{{ node.path }}" class="nav-{{ node.key }}{% if node.key in nav_tab %} active{% endif %}">{% set nk = node.key %}<i class="fa nav-item-icon {% if nk in ('problems', 'problem') %}fa-book{% elif nk in ('submissions', 'submission') %}fa-code{% elif nk in ('users', 'user') %}fa-users{% elif nk in ('contests', 'contest') %}fa-trophy{% elif nk == 'about' %}fa-info-circle{% elif nk == 'tickets' %}fa-ticket{% elif nk == 'home' %}fa-home{% else %}fa-angle-double-right{% endif %}" aria-hidden="true"></i><span class="nav-item-label">{{ _(node.label) }}</span>
                         {% if not node.is_leaf_node() %}
                             <div class="nav-expand">&gt;</div>
                         {% endif %}
@@ -251,24 +271,38 @@
             {% endfor %}
         </ul>
 
-        <span id="user-links">
-            <a href=
-                {% if request.resolver_match.view_name == "problem_detail" and problem %}
-                    "{{ url('new_problem_ticket', problem.code) }}"
-                {% else %}
-                    "/tickets/new?issue_url={{ request.build_absolute_uri()|urlencode }}"
-                {% endif %}
-            style="margin-right: 5px;">
-                <span title="{{ _('Report issue') }}">
-                    <i class="fa fa-exclamation-triangle" style="color: yellow;"></i>
-                </span>
-            </a>
-            <a id="flag_vi" href="#" onclick="submmit_language('vi')" style="margin-right: 5px; margin-top: 4px;">
-                <img src="{{ static('icons/vi_flag.svg') }}" alt="VI" height="24">
-            </a>
-            <a id="flag_en" href="#" onclick="submmit_language('en')" style="margin-right: 5px; margin-top: 4px;">
-                <img src="{{ static('icons/gb_flag.svg') }}" alt="EN" height="24">
-            </a>
+        <span id="user-links" class="nav-user-toolbar">
+            <span class="theme-switch-wrap" title="{{ _('Color theme') }}">
+                <label class="theme-switch">
+                    <input type="checkbox" id="theme-slider" autocomplete="off" aria-label="{{ _('Sakura theme') }}">
+                    <span class="theme-switch-slider">
+                        <span class="theme-switch-icons" aria-hidden="true">
+                            <span class="ico-milk">🥛</span>
+                            <span class="ico-sakura">🌸</span>
+                        </span>
+                    </span>
+                </label>
+            </span>
+            <div class="nav-toolbar-settings">
+                <a class="nav-report-issue" href=
+                    {% if request.resolver_match.view_name == "problem_detail" and problem %}
+                        "{{ url('new_problem_ticket', problem.code) }}"
+                    {% else %}
+                        "/tickets/new?issue_url={{ request.build_absolute_uri()|urlencode }}"
+                    {% endif %}
+                    title="{{ _('Report issue') }}"
+                >
+                    <i class="fa fa-exclamation-triangle" aria-hidden="true"></i>
+                </a>
+                <div class="nav-lang-switch" role="group" aria-label="{{ _('Language') }}">
+                    <a id="flag_vi" class="nav-flag{% if LANGUAGE_CODE == 'vi' %} active{% endif %}" href="#" onclick="submmit_language('vi'); return false;">
+                        <img src="{{ static('icons/vi_flag.svg') }}" alt="{{ _('Vietnamese') }}" width="22" height="22">
+                    </a>
+                    <a id="flag_en" class="nav-flag{% if LANGUAGE_CODE == 'en' %} active{% endif %}" href="#" onclick="submmit_language('en'); return false;">
+                        <img src="{{ static('icons/gb_flag.svg') }}" alt="{{ _('English') }}" width="22" height="22">
+                    </a>
+                </div>
+            </div>
             {% if request.user.is_authenticated %}
                 <ul>
                     <li>
@@ -297,11 +331,11 @@
                     </li>
                 </ul>
             {% else %}
-                <span class="anon">
-                    <a href="{{ url('auth_login') }}?next={{ LOGIN_RETURN_PATH|urlencode }}"><b>{{ _('Log in') }}</b></a>
-                    &nbsp;{{ _('or') }}&nbsp;
-                    <a href="{{ url('registration_register') }}"><b>{{ _('Sign up') }}</b></a>
-                </span>
+                <span class="nav-toolbar-divider" aria-hidden="true"></span>
+                <div class="nav-toolbar-auth anon">
+                    <a class="nav-btn-login" href="{{ url('auth_login') }}?next={{ LOGIN_RETURN_PATH|urlencode }}">{{ _('Log in') }}</a>
+                    <a class="nav-btn-signup" href="{{ url('registration_register') }}">{{ _('Sign up') }}</a>
+                </div>
             {% endif %}
         </span>
     </div>

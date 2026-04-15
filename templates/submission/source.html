@@ -1,30 +1,18 @@
 {% extends "submission/info-base.html" %}
-{% block media %}
-    <style>
-        .line {
-            position: relative;
-        }
-
-        .highlighter {
-            position: absolute;
-            width: 9999px;
-            top: 0;
-            bottom: 0;
-            left: 0;
-            right: 0;
-        }
-
-        a:active .line .highlighter {
-            background: rgba(255, 212, 0, 0.48);
-        }
-
-        .copy-clipboard {
-            margin-top: 0 !important;
-        }
-    </style>
-{% endblock %}
+{% set can_edit = submission.problem.is_editable_by(request.user) %}
 
 {% block js_media %}
+    {% if perms.judge.rejudge_submission and can_edit and not submission.is_locked %}
+        {% compress js %}
+            <script type="text/javascript">
+                window.confirm_and_rejudge = function (form) {
+                    if (confirm("{{ _('Are you sure you want to rejudge?') }}")) {
+                        form.submit();
+                    }
+                };
+            </script>
+        {% endcompress %}
+    {% endif %}
     {% compress js %}
         <script src="{{ static('libs/clipboard/clipboard.js') }}"></script>
         <script src="{{ static('libs/clipboard/tooltip.js') }}"></script>
@@ -62,39 +50,48 @@
 {% endblock %}
 
 {% block body %}
-    <br>
-    <div><a href="{{ url('submission_status', submission.id) }}">{{ _('View status') }}</a></div>
-    <div><a href="{{ url('submission_source_raw', submission.id) }}">{{ _('View raw source') }}</a></div>
-    {% if (request.user == submission.user.user or perms.judge.resubmit_other) and not submission.language.file_only %}
-        <div><a href="{{ url('problem_submit', submission.problem.code, submission.id) }}">{{ _('Resubmit') }}</a></div>
-    {% endif %}
-    {% set can_edit = submission.problem.is_editable_by(request.user) %}
-    {% if perms.judge.rejudge_submission and can_edit and not submission.is_locked %}
-        <div>
-            <form action="{{ url('submission_rejudge') }}" method="post">
-                {% csrf_token %}
-                <a href="#" onclick="parentNode.submit()">{{ _('Rejudge') }}</a>
-                <input type="hidden" name="id" value="{{ submission.id }}">
-                <input type="hidden" name="path" value="{{ url('submission_status', submission.id) }}">
-            </form>
+    <div class="submission-source-page">
+        <div class="submission-status-actions">
+            <a class="submission-action-pill" href="{{ url('submission_status', submission.id) }}">{{ _('View status') }}</a>
+            <a class="submission-action-pill" href="{{ url('submission_source_raw', submission.id) }}">{{ _('View raw source') }}</a>
+            {% if submission.language.file_only %}
+                <a class="submission-action-pill" href="{{ url('submission_source_download', submission.id) }}">{{ _('Download') }}</a>
+            {% endif %}
+            {% if (request.user == submission.user.user or perms.judge.resubmit_other) and not submission.language.file_only %}
+                <a class="submission-action-pill" href="{{ url('problem_submit', submission.problem.code, submission.id) }}">{{ _('Resubmit') }}</a>
+            {% endif %}
+            {% if perms.judge.rejudge_submission and can_edit and not submission.is_locked %}
+                <form class="submission-action-inline" action="{{ url('submission_rejudge') }}" method="post">
+                    {% csrf_token %}
+                    <a href="#" class="submission-action-pill" onclick="confirm_and_rejudge(this.parentNode); return false;">{{ _('Rejudge') }}</a>
+                    <input type="hidden" name="id" value="{{ submission.id }}">
+                    <input type="hidden" name="path" value="{{ url('submission_status', submission.id) }}">
+                </form>
+            {% endif %}
+            {% if can_edit and not submission.language.file_only %}
+                <a class="submission-action-pill" href="{{ url('problem_submission_diff', submission.problem.code) }}?username={{ submission.user.user.username }}&highlight={{ submission.id }}">{{ _('Diff this submission') }}</a>
+            {% endif %}
         </div>
-    {% endif %}
-    <br>
-    <hr>
-    <div class="source-wrap">
-        <table>
-            <tr>
-                <td class="source-ln">
-                    <div>
-                        {% for line in raw_source.split('\n') %}
-                            <a href="#line-{{ loop.index }}" name="line-{{ loop.index }}">
-                                <pre class="line">{{ loop.index }}</pre>
-                            </a>
-                        {% endfor %}
-                    </div>
-                </td>
-                <td class="source-code">{{ highlighted_source }}</td>
-            </tr>
-        </table>
+
+        <hr class="submission-status-divider">
+
+        <div class="submission-source-code-panel">
+            <div class="source-wrap">
+                <table>
+                    <tr>
+                        <td class="source-ln">
+                            <div>
+                                {% for line in raw_source.split('\n') %}
+                                    <a href="#line-{{ loop.index }}" name="line-{{ loop.index }}">
+                                        <pre class="line">{{ loop.index }}</pre>
+                                    </a>
+                                {% endfor %}
+                            </div>
+                        </td>
+                        <td class="source-code">{{ highlighted_source }}</td>
+                    </tr>
+                </table>
+            </div>
+        </div>
     </div>
 {% endblock %}

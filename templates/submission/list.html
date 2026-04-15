@@ -94,8 +94,35 @@
 
             // Draw the statistics graph.
             var chart = null;
+            function chartSegmentBorderColor() {
+                var v = getComputedStyle(document.documentElement).getPropertyValue('--theme-card').trim();
+                if (!v || v === 'rgba(0, 0, 0, 0)') {
+                    return '#ffffff';
+                }
+                return v;
+            }
+
+            function donutColorsForTheme(serverColors) {
+                var sakura = document.documentElement.classList.contains('theme-sakura');
+                var pastel = {
+                    AC: sakura ? '#4a9d88' : '#3d8f7a',
+                    WA: sakura ? '#d88992' : '#d9725c',
+                    CE: '#5f6f82',
+                    TLE: '#a3b5b8',
+                    ERR: '#d9a15e',
+                };
+                var c = Object.assign({}, serverColors || {}, pastel);
+                return c;
+            }
+
             function stats_graph(raw_data) {
-                var colors = {{ results_colors_json }};
+                var colors = donutColorsForTheme({{ results_colors_json }});
+                var gap = chartSegmentBorderColor();
+                var n = raw_data.categories.length;
+                var borders = [];
+                for (var i = 0; i < n; i++) {
+                    borders.push(gap);
+                }
 
                 var ctx = $('#status-graph').find('canvas')[0].getContext('2d');
                 var font = $('body').css('font-family');
@@ -103,15 +130,19 @@
                     chart.destroy();
                 }
                 chart = new Chart(ctx, {
-                    type: 'pie',
+                    type: 'doughnut',
                     data: {
                         datasets: [{
                             data: raw_data.categories.map(function(entry) {
                                 return entry.count;
                             }),
                             backgroundColor: raw_data.categories.map(function(entry) {
-                                return colors[entry.code];
+                                return colors[entry.code] || '#a3bcbd';
                             }),
+                            borderColor: borders,
+                            borderWidth: 3,
+                            hoverBorderColor: borders,
+                            hoverBorderWidth: 3,
                         }],
                         labels: raw_data.categories.map(function(entry) {
                             return entry.name;
@@ -119,13 +150,15 @@
                     },
                     options: {
                         animation: false,
-                        scaleFontFamily: font,
+                        cutoutPercentage: 58,
+                        responsive: false,
+                        maintainAspectRatio: false,
+                        legend: {
+                            display: false,
+                        },
                         tooltips: {
                             titleFontFamily: font,
                             bodyFontFamily: font,
-                        },
-                        legend: {
-                            display: false,
                         },
                     },
                 });
@@ -286,18 +319,9 @@
     {% endif %}
 
     <style>
-        .total {
-            text-align: center;
-            margin-bottom: 0.5em;
-        }
-
+        /* Symmetric vertical space so donut hole lines up with Chart.js canvas (no optical drop). */
         #status-graph {
-            padding: 1em 0em;
-        }
-
-        #status-graph canvas {
-            display: block;
-            margin: 0 auto;
+            padding: 8px 0;
         }
     </style>
 {% endblock %}
@@ -345,19 +369,21 @@
                                     </select>
                                 </div>
                             {% endif %}
-                            <div class="form-submit-group">
-                                <a id="go" onclick="form.submit()" class="button">{{ _('Go') }}</a>
+                            <div class="form-submit-group submission-filter-actions">
+                                <button id="go" type="submit" class="button submission-filter-apply">{{ _('Apply') }}</button>
+                                <a class="submission-filter-clear" href="{{ first_page_href }}">{{ _('Clear') }}</a>
                             </div>
                         </form>
                     </div>
                     <div id="statistics-table">
                         <h3>{{ _('Statistics') }} <i class="fa fa-pie-chart"></i></h3>
                         <div class="sidebox-content">
-                            <div id="status-graph">
-                                <canvas width="230" height="170"></canvas>
-                            </div>
-                            <div class="total">
-                                {{ _('Total:') }} <span id="total-submission-count"></span>
+                            <div id="status-graph" class="submission-stats-donut-wrap" aria-live="polite">
+                                <div class="submission-stats-donut-center">
+                                    <span id="total-submission-count" class="submission-stats-donut-center__n">0</span>
+                                    <span class="submission-stats-donut-center__lbl">{{ _('Total') }}</span>
+                                </div>
+                                <canvas width="220" height="220"></canvas>
                             </div>
                         </div>
                     </div>

@@ -1,85 +1,102 @@
 {% extends "base.html" %}
 
-{% block media %}
-    <style>
-        h4 {
-            padding-top: 1em;
-        }
-
-        .social {
-            display: inline;
-            font-size: 2.3em;
-            float: none;
-        }
-
-        .google-icon i {
-            color: #DD4B38;
-        }
-
-        .facebook-icon i {
-            color: #133783;
-        }
-
-        .github-icon i {
-            color: black;
-        }
-    </style>
-{% endblock %}
+{% block title_row %}{% endblock %}
+{% block title_ruler %}{% endblock %}
 
 {% block body %}
-    <div class="auth-flow-form">
-        <form action="" method="post" class="form-area">
-            {% csrf_token %}
-            {% if form.errors %}
-                <div id="form-errors" style="max-width: fit-content;">
-                    <p class="error">{{ _('Invalid username or password.') }}</p>
-                    {% for error in form.non_field_errors() %}
-                        <p class="error">{{error}}</p>
-                    {% endfor %}
-                    {% if form.errors and misc_config.discord_invite_link and misc_config.discord_invite_shieldio %}
-                    {{ _('If you have problems with your account, feel free to shoot us a message at: ') }}<a href="{{ misc_config.discord_invite_link }}"><img src="{{ misc_config.discord_invite_shieldio }}"></a>
-                    {% endif %}
+    <div class="auth-flow-form login-page">
+        <div class="login-card">
+            <h1 class="login-card__title">{{ _('Login') }}</h1>
+
+            <form id="login-form" class="login-card__form" action="" method="post">
+                {% csrf_token %}
+                {% if form.errors %}
+                    <div id="form-errors" class="login-card__errors" role="alert">
+                        <p class="error">{{ _('Invalid username or password.') }}</p>
+                        {% for error in form.non_field_errors() %}
+                            <p class="error">{{ error }}</p>
+                        {% endfor %}
+                        {% if form.errors and misc_config.discord_invite_link and misc_config.discord_invite_shieldio %}
+                            <p>{{ _('If you have problems with your account, feel free to shoot us a message at: ') }}<a href="{{ misc_config.discord_invite_link }}"><img src="{{ misc_config.discord_invite_shieldio }}" alt=""></a></p>
+                        {% endif %}
+                    </div>
+                {% endif %}
+
+                <div class="login-card__field">
+                    <label class="login-card__label" for="id_username">{{ _('Username') }}</label>
+                    {{ form.username }}
+                </div>
+
+                <div class="login-card__field">
+                    <label class="login-card__label" for="id_password">{{ _('Password') }}</label>
+                    <div class="login-card__password-wrap">
+                        {{ form.password }}
+                        <span id="login-aria-show" class="login-i18n-bridge" hidden>{{ _('Show password') }}</span>
+                        <span id="login-aria-hide" class="login-i18n-bridge" hidden>{{ _('Hide password') }}</span>
+                        <button type="button" class="login-password-toggle" id="login-password-toggle"
+                            aria-label="{{ _('Show password') }}"
+                            aria-pressed="false">
+                            <i class="fa fa-eye" aria-hidden="true"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="login-card__forgot">
+                    <a href="{{ url('password_reset') }}">{{ _('Forgot your password?') }}</a>
+                </div>
+
+                <button type="submit" class="login-card__submit" id="login-submit">{{ _('Login!') }}</button>
+                <input type="hidden" name="next" value="{{ next }}">
+            </form>
+
+            {% if form.has_google_auth or form.has_facebook_auth or form.has_github_auth %}
+                <div class="login-card__social">
+                    <p class="login-card__social-intro">{{ _('Or continue with') }}</p>
+                    <div class="login-card__social-buttons">
+                        {% if form.has_google_auth %}
+                            <a href="{{ url('social:begin', "google-oauth2") }}?next={{ next|urlencode }}" class="login-social-btn login-social-btn--google">
+                                <i class="fa fa-google login-social-btn__icon" aria-hidden="true"></i>
+                                <span>{{ _('Continue with Google') }}</span>
+                            </a>
+                        {% endif %}
+                        {% if form.has_facebook_auth %}
+                            <a href="{{ url('social:begin', "facebook") }}?next={{ next|urlencode }}" class="login-social-btn login-social-btn--facebook">
+                                <i class="fa fa-facebook login-social-btn__icon" aria-hidden="true"></i>
+                                <span>{{ _('Continue with Facebook') }}</span>
+                            </a>
+                        {% endif %}
+                        {% if form.has_github_auth %}
+                            <a href="{{ url('social:begin', "github-secure") }}?next={{ next|urlencode }}" class="login-social-btn login-social-btn--github">
+                                <i class="fa fa-github login-social-btn__icon" aria-hidden="true"></i>
+                                <span>{{ _('Continue with GitHub') }}</span>
+                            </a>
+                        {% endif %}
+                    </div>
                 </div>
             {% endif %}
-            <table border="0" style="text-align:left">
-                <tr>
-                    <th><i class="fa fa-user fa-fw"></i>
-                    </th>
-                    <td>{{ form.username }}
-                    </td>
-                </tr>
-                <tr>
-                    <th><i class="fa fa-key fa-fw"></i>
-                    </th>
-                    <td>{{ form.password }}
-                    </td>
-                </tr>
-            </table>
-            <hr>
-            <button style="float:right;" type="submit">{{ _('Login!') }}</button>
-            <input type="hidden" name="next" value="{{ next }}">
-        </form>
-        <a href="{{ url('password_reset') }}">{{ _('Forgot your password?') }}</a>
-
-        {% if form.has_google_auth or form.has_facebook_auth or form.has_github_auth %}
-            <h4>{{ _('Or log in with...') }}</h4>
-            <div>
-                {% if form.has_google_auth %}
-                    <a href="{{ url('social:begin', "google-oauth2") }}?next={{ next }}" class="social google-icon">
-                        <i class="fa fa-google-plus-square"></i>
-                    </a>
-                {% endif %}
-                {% if form.has_facebook_auth %}
-                    <a href="{{ url('social:begin', "facebook") }}?next={{ next }}" class="social facebook-icon">
-                        <i class="fa fa-facebook-square"></i>
-                    </a>
-                {% endif %}
-                {% if form.has_github_auth %}
-                    <a href="{{ url('social:begin', "github-secure") }}?next={{ next }}" class="social github-icon">
-                        <i class="fa fa-github-square"></i>
-                    </a>
-                {% endif %}
-            </div>
-        {% endif %}
+        </div>
     </div>
+{% endblock %}
+
+{# Avoid {% compress %} here: offline JS minifiers have been known to segfault on small inline scripts. #}
+{% block js_media %}
+    <script>
+        $(function () {
+            var $pw = $('#id_password');
+            var $toggle = $('#login-password-toggle');
+            if ($toggle.length && $pw.length) {
+                $toggle.on('click', function () {
+                    var show = $pw.attr('type') === 'password';
+                    $pw.attr('type', show ? 'text' : 'password');
+                    $toggle.attr('aria-pressed', show ? 'true' : 'false');
+                    var isText = $pw.attr('type') === 'text';
+                    $toggle.attr('aria-label', isText ? $('#login-aria-hide').text() : $('#login-aria-show').text());
+                    $toggle.find('.fa').toggleClass('fa-eye fa-eye-slash');
+                });
+            }
+            $('#login-form').on('submit', function () {
+                $('#login-submit').prop('disabled', true).addClass('is-loading');
+            });
+        });
+    </script>
 {% endblock %}

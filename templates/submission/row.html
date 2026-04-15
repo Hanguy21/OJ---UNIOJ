@@ -1,21 +1,27 @@
 {% set can_view, can_edit = submission_layout(submission, profile_id, request.user, completed_problem_ids, editable_problem_ids, tester_problem_ids) %}
 <div class="sub-result {{ submission.result_class }}">
-    <div class="score">
-        {%- if submission.is_graded -%}
-            {%- if submission.status in ('IE', 'CE', 'AB') -%}
-                ---
-            {%- else -%}
-                {{ submission.case_points|floatformat(-3) }} / {{ submission.case_total|floatformat(0) }}
-            {%- endif -%}
-        {%- else -%}
-            <i class="fa fa-spinner fa-pulse grading-spinner"></i>
-        {%- endif -%}
-    </div>
+    {% if can_view %}
+        <a class="sub-result-link" href="{{ url('submission_status', submission.id) }}" aria-label="{{ _('View submission %(id)s', id=submission.id) }}">
+    {% endif %}
+            <div class="score">
+                {%- if submission.is_graded -%}
+                    {%- if submission.status in ('IE', 'CE', 'AB') -%}
+                        ---
+                    {%- else -%}
+                        {{ submission.case_points|floatformat(-3) }} / {{ submission.case_total|floatformat(0) }}
+                    {%- endif -%}
+                {%- else -%}
+                    <i class="fa fa-spinner fa-pulse grading-spinner"></i>
+                {%- endif -%}
+            </div>
 
-    <div class="state">
-        <span title="{{ submission.long_status }}" class="status">{{ submission.short_status }}</span> |
-        <span class="language">{{ submission.language.short_display_name }}</span>
-    </div>
+            <div class="state">
+                <span title="{{ submission.long_status }}" class="status">{{ submission.short_status }}</span> |
+                <span class="language">{{ submission.language.short_display_name }}</span>
+            </div>
+    {% if can_view %}
+        </a>
+    {% endif %}
 </div>
 {% set can_view_testcase_status = request.user.is_superuser or submission.problem.testcase_result_visibility_mode == 'A' %}
 <div class="sub-main">
@@ -25,10 +31,10 @@
                 <a href="{{ url('problem_detail', submission.problem.code) }}">{{ problem_name }}</a>
             </div>
         {% endif %}
-        <div>
-            {{ link_user(submission.user) }}
-            <br class="xs-br">
-            <span class="time">{{ relative_time(submission.date) }}</span>
+        <div class="sub-meta">
+            <span class="sub-meta__user">{{ link_user(submission.user) }}</span>
+            <span class="sub-meta__sep" aria-hidden="true"> · </span>
+            <span class="sub-meta__when">{{ relative_time(submission.date) }}</span>
             {% if not request.in_contest and submission.contest_object_id %}
                 <a href="{{ url('contest_view', submission.contest_object.key) }}"
                    class="submission-contest">
@@ -43,7 +49,7 @@
             {%- if submission.current_testcase > 0 -%}
                 {{ _('Case #%(case)s', case=submission.current_testcase) }}
             {%- else -%}
-                ...
+                …
             {%- endif -%}
         </div>
     {% endif %}

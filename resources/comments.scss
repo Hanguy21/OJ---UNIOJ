@@ -99,6 +99,27 @@ a {
     color: $color_primary75;
 }
 
+#content-left.split-common-content .comment-area {
+    margin-top: 1.25em;
+    padding: 12px 14px 16px;
+    border: 1px solid $color_primary25;
+    border-radius: 14px;
+    background: $color_primary0;
+    box-shadow: 0 6px 20px rgba(29, 28, 22, 0.07);
+    box-sizing: border-box;
+
+    h2 {
+        font-family: $sans_fonts;
+        font-weight: 600;
+        color: $color_primary100;
+        margin-top: 0;
+    }
+
+    .alert {
+        border-radius: 10px;
+    }
+}
+
 .new-comments {
     .comment-display {
         display: flex;
@@ -186,4 +207,63 @@ a {
         /* This is necessary to prevent random flickering */
         transform: translatez(0);
     }
+}
+
+// User profile — comments tab
+.user-comments-page {
+    max-width: 920px;
+    margin: 0 auto;
+    padding: 0 6px 24px;
+    box-sizing: border-box;
+}
+
+.user-comments-page .user-comments-toolbar {
+    margin: 0 0 14px;
+
+    .button {
+        border-radius: 10px;
+        font-weight: 600;
+        padding: 8px 18px;
+    }
+}
+
+.user-profile-comments.new-comments .comment-display {
+    border-radius: 14px;
+    overflow: hidden;
+    border: 1px solid $color_primary25;
+    background: #fff;
+    box-shadow: 0 4px 14px rgba(29, 28, 22, 0.07);
+    padding-left: 0 !important;
+    padding-top: 0 !important;
+    margin-bottom: 12px;
+}
+
+.user-profile-comments.new-comments .comment-display > .info {
+    background: $color_primary5;
+    padding: 10px 12px 12px;
+    gap: 10px;
+    align-items: flex-start;
+}
+
+.user-profile-comments.new-comments .vote {
+    margin-right: 0;
+    padding: 6px 4px 0;
+    min-width: 2.5em;
+    flex-shrink: 0;
+}
+
+.user-profile-comments.new-comments .detail {
+    margin: 0;
+    padding: 10px 14px 12px;
+    background: #fff;
+}
+
+.user-profile-comments.new-comments .detail .header {
+    border-bottom-color: $color_primary25;
+    color: $color_primary50;
+}
+
+.user-profile-comments.new-comments .gravatar-main .gravatar {
+    border-radius: 10px;
+    border: 1px solid $color_primary25;
 }

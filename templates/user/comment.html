@@ -12,12 +12,13 @@
 {% block title_ruler %}{% endblock %}
 
 {% block body %}
+    <div class="content-description user-comments-page">
     {% block before_comments %}{% endblock %}
-        <form action="{{url('user_comment', user.username)}}" method="post">
+        <form class="user-comments-toolbar" action="{{url('user_comment', user.username)}}" method="post">
             {% csrf_token %}
-            <button type="submit">Delete all comments</button>
+            <button type="submit" class="button">{{ _('Delete all comments') }}</button>
         </form>
-        <ul class="comments top-level-comments new-comments">
+        <ul class="comments top-level-comments new-comments user-profile-comments">
             {% set logged_in = request.user.is_authenticated %}
             {% for comment in comments %}
                 <li id="comment-{{ comment.id }}" data-revision="{{ comment.revisions - 1 }}"
@@ -113,6 +114,7 @@
         <div class="bottom-pagination-bar">{% include "list-pages.html" %}</div>
     {% endif %}
     {% block after_comments %}{% endblock %}
+    </div>
 {% endblock %}
 
 {% block bodyend %}

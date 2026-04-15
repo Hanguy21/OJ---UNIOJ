@@ -1,4 +1,4 @@
-<div class="sidebox">
+<div class="sidebox problem-search-sidebox">
     <h3>{{ _('Problem search') }} <i class="fa fa-search"></i>
     </h3>
     <div class="sidebox-content">
@@ -62,9 +62,9 @@
             {% endif %}
             <input id="point-start" type="hidden" name="point_start" {% if point_start and point_start != point_values.min %}value="{{ point_start }}"{% else %}disabled{% endif %}>
             <input id="point-end" type="hidden" name="point_end" {% if point_end and point_end != point_values.max %}value="{{ point_end }}"{% else %}disabled{% endif %}>
-            <div class="form-submit-group">
-                <a id="go" class="button">{{ _('Go') }}</a>
-                <a id="random" class="button">{{ _('Random') }}</a>
+            <div class="form-submit-group problem-filter-actions">
+                <button type="button" id="go" class="button">{{ _('Apply') }}</button>
+                <button type="button" id="random" class="button button-secondary">{{ _('Random') }}</button>
             </div>
         </form>
 

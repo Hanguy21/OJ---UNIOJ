@@ -1,0 +1,167 @@
+@import "vars";
+
+@if $is_light_theme {
+    // --- Navbar theme switch (compact, right toolbar) ---------------------
+    .theme-switch-wrap {
+        display: inline-flex;
+        align-items: center;
+        margin-right: 6px;
+        vertical-align: middle;
+    }
+
+    .theme-switch {
+        position: relative;
+        display: inline-block;
+        width: 48px;
+        height: 26px;
+        flex-shrink: 0;
+        cursor: pointer;
+    }
+
+    .theme-switch input {
+        opacity: 0;
+        width: 0;
+        height: 0;
+    }
+
+    .theme-switch-slider {
+        position: absolute;
+        inset: 0;
+        border-radius: 999px;
+        background: var(--theme-border);
+        transition: background 0.25s ease;
+        box-shadow: inset 0 1px 2px rgba(29, 28, 22, 0.06);
+    }
+
+    .theme-switch-slider::before {
+        content: "";
+        position: absolute;
+        height: 20px;
+        width: 20px;
+        left: 3px;
+        bottom: 3px;
+        border-radius: 50%;
+        background: var(--theme-card);
+        transition: transform 0.25s ease, background 0.25s ease;
+        box-shadow: 0 1px 4px rgba(29, 28, 22, 0.12);
+        z-index: 2;
+    }
+
+    .theme-switch-icons {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0 7px;
+        font-size: 11px;
+        line-height: 1;
+        z-index: 1;
+        pointer-events: none;
+        user-select: none;
+    }
+
+    .theme-switch input:checked + .theme-switch-slider {
+        background: rgba(233, 162, 168, 0.45);
+    }
+
+    .theme-switch input:checked + .theme-switch-slider::before {
+        transform: translateX(22px);
+        background: var(--theme-accent);
+    }
+
+    .theme-switch input:focus-visible + .theme-switch-slider {
+        outline: 2px solid var(--theme-accent);
+        outline-offset: 2px;
+    }
+
+    // Sign up CTA: Sakura uses accent pink; Milk uses charcoal via --theme-text in navbar.scss
+    html.theme-sakura #user-links.nav-user-toolbar .nav-btn-signup {
+        background: var(--theme-accent) !important;
+        border-color: transparent;
+    }
+
+    // Login card — Sakura accents on primary + focus
+    html.theme-sakura .login-card__submit {
+        background: var(--theme-accent) !important;
+        color: #fff !important;
+    }
+
+    html.theme-sakura .login-card__submit.is-loading::before {
+        border-color: rgba(255, 255, 255, 0.35);
+        border-top-color: #fff;
+    }
+
+    html.theme-sakura .login-card .login-field:focus,
+    html.theme-sakura .login-card input.login-field:focus,
+    html.theme-sakura .login-card input[type="password"].login-field:focus {
+        border-color: var(--theme-accent) !important;
+        box-shadow: inset 0 1px 1px rgba(93, 68, 70, 0.05), 0 0 0 3px var(--theme-focus-ring) !important;
+    }
+
+    html.theme-sakura .register-card input[type="text"]:focus,
+    html.theme-sakura .register-card input[type="email"]:focus,
+    html.theme-sakura .register-card input[type="password"]:focus,
+    html.theme-sakura .register-card input[type="url"]:focus,
+    html.theme-sakura .register-card input[type="search"]:focus {
+        background: #fff !important;
+        border-color: var(--theme-accent) !important;
+        box-shadow: inset 0 1px 1px rgba(93, 68, 70, 0.05), 0 0 0 3px var(--theme-focus-ring) !important;
+    }
+
+    html.theme-sakura .login-social-btn:hover {
+        border-color: rgba(233, 162, 168, 0.55);
+    }
+
+    html.theme-sakura nav {
+        border-bottom-color: rgba(245, 196, 203, 0.55);
+    }
+}
+
+// After `widgets`: global `button` uses `color: #fff !important` while navbar clears
+// background on nav menu buttons → white-on-white in the account dropdown until hover.
+#navigation #user-links ul ul {
+    a,
+    a:link,
+    a:visited {
+        color: var(--theme-text) !important;
+    }
+
+    a:hover,
+    a:active {
+        color: var(--theme-text) !important;
+    }
+
+    button {
+        color: var(--theme-text) !important;
+        background: transparent !important;
+        box-shadow: none !important;
+
+        @if $is_light_theme {
+            &:hover {
+                background: rgba(29, 28, 22, 0.06) !important;
+                color: var(--theme-text) !important;
+            }
+
+            &:active {
+                background: rgba(29, 28, 22, 0.09) !important;
+                color: var(--theme-text) !important;
+            }
+        } @else {
+            &:hover {
+                background: rgba(255, 255, 255, 0.08) !important;
+                color: var(--theme-text) !important;
+            }
+
+            &:active {
+                background: rgba(255, 255, 255, 0.12) !important;
+                color: var(--theme-text) !important;
+            }
+        }
+    }
+}
+
+// Problem list rail: pin elevation last so `.sidebox` never reads “flat” on cream / sakura page bg.
+.problem-list-page #content-right.problems .sidebox {
+    box-shadow: var(--theme-panel-elevate) !important;
+}

@@ -3,6 +3,7 @@
 {% block user_media %}
     {% include "timezone/media-css.html" %}
     {{ form.media.css }}
+    <link rel="stylesheet" type="text/css" href="{{ static('ui_form.css') }}">
     <style>
         .sortedm2m-container, .sortedm2m-container p.selector-filter {
             width: 300px;
@@ -40,9 +41,7 @@
         }
 
         #edit-form {
-            border: unset;
-            background: unset;
-            max-width: 700px;
+            max-width: 880px;
         }
 
         .settings {
@@ -258,8 +257,9 @@
 {% endblock %}
 
 {% block body %}
+    <div class="profile-edit-page">
     <div class="centered-form">
-        <form id="edit-form" action="" method="post" class="form-area">
+        <form id="edit-form" action="" method="post" class="form-area profile-edit-card">
             {% if form.errors %}
                 <div class="alert alert-danger alert-dismissable">
                     <a href="#" class="close">x</a>
@@ -437,7 +437,10 @@
             </div>
             <hr>
 
-            <input type="submit" class="submit-bar" value="{{ _('Update profile') }}">
+            <div class="profile-edit-actions">
+                <input type="submit" class="button" value="{{ _('Update profile') }}">
+            </div>
         </form>
+    </div>
     </div>
 {% endblock %}

@@ -452,3 +452,389 @@ ul.problem-list {
         font-size: 13px;
     }
 }
+
+// --- Problem list, search sidebar, submit (modern UI, aligned with submissions) ---
+.problem-list-page {
+    --pl-bg: var(--theme-page-bg);
+    --pl-surface: var(--theme-card);
+    --pl-card: var(--theme-card);
+    --pl-border: var(--theme-border);
+    --pl-border-strong: var(--theme-border-strong);
+    --pl-head: var(--theme-head-bg);
+    --pl-head-fg: var(--theme-text);
+    --pl-shadow: var(--theme-shadow);
+    --pl-shadow-side: var(--theme-shadow-side);
+    --pl-accent: var(--theme-accent);
+}
+
+#content-left.problems.problem-list-main {
+    background: var(--pl-surface);
+    border: 1px solid var(--pl-border);
+    border-radius: 16px;
+    padding: 12px;
+    box-sizing: border-box;
+    box-shadow: var(--pl-shadow);
+}
+
+.problem-table-card {
+    border-radius: 12px;
+    border: 1px solid var(--pl-border);
+    box-shadow: var(--pl-shadow);
+    background: var(--pl-card);
+    overflow: hidden;
+}
+
+.problem-list-page #problem-table.table {
+    margin-bottom: 0;
+    background: transparent;
+    backdrop-filter: none;
+
+    thead th {
+        padding: 10px 12px;
+        color: var(--pl-head-fg);
+        background: var(--pl-head);
+        border-color: var(--pl-border);
+        font-weight: 600;
+        font-size: 1em;
+
+        a {
+            color: inherit;
+            text-decoration: none;
+
+            &:hover {
+                text-decoration: underline;
+            }
+        }
+    }
+
+    tbody td {
+        padding: 9px 10px;
+        border-color: var(--pl-border);
+    }
+
+    &.striped tbody tr:nth-child(2n) {
+        background: var(--theme-row-stripe);
+    }
+
+    tbody tr {
+        transition: background-color 0.15s ease;
+
+        &:hover {
+            background: var(--theme-row-hover) !important;
+        }
+    }
+}
+
+.problem-list-page #content-right.problems {
+    .info-float {
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+        padding: 14px 8px 16px 18px;
+        margin-left: 6px;
+        border-left: 1px solid var(--theme-border);
+        border-bottom: 1px solid var(--theme-border);
+        box-sizing: border-box;
+        border-radius: 0 0 0 12px;
+    }
+
+    .sidebox {
+        background: var(--pl-card);
+        border: 1px solid var(--pl-border-strong);
+        border-radius: 16px;
+        box-shadow: var(--theme-panel-elevate, var(--pl-shadow-side));
+        padding: 0 !important;
+        margin: 0;
+        position: relative;
+        z-index: 1;
+        transition: box-shadow 0.25s ease, border-color 0.2s ease;
+    }
+
+    .sidebox h3 {
+        margin: 0;
+        border-radius: 16px 16px 0 0;
+        background: var(--theme-surface-soft);
+        color: var(--theme-text);
+        border-bottom: 1px solid var(--pl-border);
+        padding: 10px 12px;
+    }
+
+    .sidebox h3 .fa {
+        color: var(--theme-accent);
+    }
+
+    .sidebox-content {
+        margin: 0;
+        border: none;
+        padding: 10px 12px 12px;
+    }
+
+    #filter-form {
+        margin-top: 0;
+
+        input[type="text"] {
+            width: 100%;
+            box-sizing: border-box;
+            border-radius: 10px;
+        }
+
+        .filter-form-group {
+            margin-top: 8px;
+        }
+    }
+
+    .form-submit-group.problem-filter-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        justify-content: flex-end;
+        align-items: center;
+    }
+
+    .button {
+        border-radius: 10px;
+        display: inline-block;
+    }
+
+    .button-secondary {
+        background: #f9f8f6 !important;
+        color: #1d1c16 !important;
+        border: 1px solid #e6e4dd;
+
+        &:hover {
+            background: #edece8 !important;
+        }
+    }
+
+    ul.problem-list {
+        padding-left: 0;
+        margin: 0;
+        list-style: none;
+
+        li {
+            margin-bottom: 6px;
+
+            a {
+                display: block;
+                padding: 6px 8px;
+                border-radius: 8px;
+                text-decoration: none;
+
+                &:hover {
+                    background: rgba(217, 119, 87, 0.08);
+                }
+            }
+        }
+    }
+}
+
+.problem-list-page #point-slider {
+    .noUi-connect {
+        background: var(--theme-accent);
+    }
+
+    .noUi-horizontal .noUi-handle {
+        border-radius: 6px;
+        border-color: $color_primary25;
+        background: $color_primary0;
+        box-shadow: 0 1px 3px rgba(29, 28, 22, 0.12);
+    }
+}
+
+// Problem statement page: sidebar card
+#content-right .info-float:has(.problem-info-entry) {
+    background: var(--pl-card, #fff);
+    border: 1px solid var(--pl-border, #{$color_primary25});
+    border-radius: 14px;
+    box-shadow: var(--pl-shadow, 0 8px 24px rgba(29, 28, 22, 0.1));
+    padding: 12px;
+    box-sizing: border-box;
+}
+
+#content-right .info-float:has(.problem-info-entry) .button.full {
+    border-radius: 10px;
+}
+
+#content-right .info-float:has(.problem-info-entry) hr {
+    border: 0;
+    border-top: 1px solid $color_primary25;
+}
+
+// Submit form
+#problem_submit.form-area {
+    background: $color_primary5;
+    border: 1px solid $color_primary25;
+    border-radius: 14px;
+    padding: 16px 18px;
+    box-sizing: border-box;
+    box-shadow: 0 6px 22px rgba(29, 28, 22, 0.07);
+    max-width: 960px;
+    margin: 0 auto;
+
+    hr {
+        border: 0;
+        border-top: 1px solid $color_primary25;
+        margin: 1em 0;
+    }
+
+    .submit-bar {
+        text-align: right;
+    }
+
+    input[type="submit"].button {
+        border-radius: 10px;
+    }
+}
+
+// Create problem / import polygon pages
+.problem-admin-page {
+    --pa-bg: #{$color_primary5};
+    --pa-card: #{$color_primary0};
+    --pa-border: #{$color_primary25};
+    --pa-shadow: 0 8px 24px rgba(29, 28, 22, 0.08);
+    --pa-muted: #{$color_primary50};
+    max-width: 980px;
+    margin: 0 auto;
+}
+
+.problem-admin-title {
+    margin-top: 0;
+    margin-bottom: 12px;
+    color: $color_primary100;
+}
+
+.problem-admin-alert {
+    border-radius: 12px;
+    border: 1px solid #eadfbc;
+}
+
+.problem-admin-card {
+    display: block;
+    width: 100%;
+    box-sizing: border-box;
+    background: var(--pa-bg);
+    border: 1px solid var(--pa-border);
+    border-radius: 14px;
+    box-shadow: var(--pa-shadow);
+    padding: 14px 16px;
+}
+
+.problem-admin-actions {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+}
+
+.create-problem-page .problem-admin-card {
+    margin-top: 10px;
+}
+
+.polygon-import-wrap {
+    max-width: 920px;
+    margin: 0 auto;
+}
+
+.polygon-import-page .polygon-import-card {
+    border: 1px solid var(--pa-border);
+    border-radius: 14px;
+    background: var(--pa-card);
+    padding: 14px 16px;
+    box-shadow: var(--pa-shadow);
+}
+
+.polygon-import-note {
+    font-size: 0.93em;
+    color: var(--pa-muted);
+    margin-top: 8px;
+}
+
+.polygon-import-actions {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 12px;
+}
+
+.polygon-inline-help {
+    margin-top: 10px;
+    padding: 10px 12px;
+    border: 1px solid $color_primary25;
+    border-left: 3px solid $highlight_blue;
+    border-radius: 0 8px 8px 0;
+    background: $color_primary5;
+}
+
+#polygon-import-form.problem-admin-card {
+    margin-top: 14px;
+}
+
+.polygon-progress-wrap {
+    margin-top: 16px;
+}
+
+.polygon-progress-bar {
+    height: 10px;
+    background: $color_primary10;
+    border-radius: 999px;
+    overflow: hidden;
+}
+
+.polygon-progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, $highlight_blue, #c4624a);
+}
+
+.polygon-log-box {
+    margin-top: 10px;
+    background: #0f1720;
+    color: #d8e0ea;
+    border-radius: 10px;
+    padding: 12px;
+    font-family: monospace;
+    white-space: pre-wrap;
+    max-height: 320px;
+    overflow: auto;
+}
+
+.polygon-status-ok {
+    color: #1d7f39;
+}
+
+.polygon-status-failed {
+    color: #b82525;
+}
+
+.polygon-status-cancelled {
+    color: #875900;
+}
+
+.polygon-control-row {
+    margin-top: 10px;
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+}
+
+// Problem statement page header + clarifications
+.problem-title h2 {
+    font-family: $sans_fonts;
+    font-weight: 700;
+    font-size: 1.55em;
+    margin: 0;
+    color: $color_primary100;
+    line-height: 1.25;
+}
+
+.problem-clarification {
+    border-bottom: none;
+    padding: 10px 12px;
+    margin: 10px 0;
+    border: 1px solid $color_primary25;
+    border-radius: 10px;
+    background: $color_primary0;
+}
+
+.clarifications-area h2 {
+    font-family: $sans_fonts;
+    font-weight: 600;
+    color: $color_primary100;
+}

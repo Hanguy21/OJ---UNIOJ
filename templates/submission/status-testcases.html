@@ -40,9 +40,9 @@
             <hr class="half-hr"><br>
         {% endif %}
         {% if is_pretest %}
-            <h3>{{ _('Pretest Execution Results') }}</h3>
+            <h3 class="submission-exec-heading">{{ _('Pretest Execution Results') }}</h3>
         {% else %}
-            <h3>{{ _('Execution Results') }}</h3>
+            <h3 class="submission-exec-heading">{{ _('Execution Results') }}</h3>
         {% endif %}
         <br>
         {% if can_view_testcase_status or can_view_batch_status %}
@@ -163,6 +163,7 @@
         {% endfor %}
         {% if statuses and submission.is_graded %}
             <br>
+            <div class="submission-exec-footer">
             {% if submission.result != "AB" %}
                 {% if can_view_testcase_status %}
                     <b>{{ _('Resources:') }}</b>
@@ -203,6 +204,7 @@
             {% else %}
                 <b>{{ _('Submission aborted!') }}</b>
             {% endif %}
+            </div>
             <br>
         {% endif %}
         {% else %}

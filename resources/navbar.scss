@@ -1,11 +1,10 @@
-// Navbar should look the same in every theme, so vars-common should be enough.
-@import "vars-common";
+@import "vars";
 
 #user-links {
     top: 0;
     right: 0;
     position: absolute;
-    color: #5c5954;
+    color: var(--theme-text-muted);
     padding-right: 10px;
     display: inline-flex;
     min-height: 100%;
@@ -13,7 +12,7 @@
     white-space: nowrap;
 
     a {
-        color: #FFF;
+        color: var(--theme-text);
     }
 
     li {
@@ -44,7 +43,7 @@
 
                     & > span {
                         vertical-align: middle;
-                        color: #eee;
+                        color: var(--theme-text-muted);
                     }
                 }
             }
@@ -56,27 +55,18 @@
     }
 }
 
-#nav-background {
-    position: absolute;
-    z-index: 3;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 56px;
-    background: #231f20;
-}
-
+// Note: there is no #nav-background in templates — elevation must live on <nav#navigation>.
 #nav-shadow {
-    height: 3px;
-    background: linear-gradient(rgba(0, 0, 0, 0.5), transparent);
+    height: 1px;
+    background: transparent;
 }
 
 #nav-container {
-    background: #231f20;
-
-    // opacity: 0.77
-    // filter: alpha(opacity=77)
+    background: transparent;
     height: 100%;
+    box-sizing: border-box;
+    padding: 0 16px 0 12px;
+    position: relative;
 }
 
 nav {
@@ -85,6 +75,24 @@ nav {
     left: 0;
     right: 0;
     z-index: 500;
+    width: 100%;
+    box-sizing: border-box;
+    border-bottom: 1px solid rgba(29, 28, 22, 0.07);
+    box-shadow: var(--theme-nav-bar-shadow, 0 4px 18px rgba(29, 28, 22, 0.07));
+    transition: box-shadow 0.35s ease, border-color 0.35s ease, background 0.35s ease;
+
+    @if $is_light_theme {
+        // Frosted bar: restraint + depth without heavy borders
+        background: rgba(255, 255, 255, 0.86);
+
+        @supports ((-webkit-backdrop-filter: blur(14px)) or (backdrop-filter: blur(14px))) {
+            backdrop-filter: blur(18px) saturate(1.12);
+            -webkit-backdrop-filter: blur(18px) saturate(1.12);
+        }
+    } @else {
+        background: var(--theme-card);
+        border-bottom-color: var(--theme-border-strong);
+    }
 
     ul {
         margin: 0 0 0 -5px;
@@ -93,10 +101,13 @@ nav {
 
         li {
             display: inline-block;
-            color: #FFF;
+            color: var(--theme-text);
             text-transform: uppercase;
+            letter-spacing: 0.07em;
             position: relative;
-            font-family: 'Source Sans Pro', sans-serif;
+            font-family: $sans_fonts;
+            font-weight: 600;
+            font-size: 0.8rem;
             &.home-nav-element a {
                 padding: 0;
                 height: 44px;
@@ -138,30 +149,53 @@ nav {
                 }
             }
 
-            a, button {
+            > a,
+            > button {
                 text-decoration: none;
                 vertical-align: middle;
-                color: #FFF;
-                padding: 14px 7px;
-                height: 20px;
-                display: inline-table;
+                color: var(--theme-text);
+                padding: 14px 14px;
+                min-height: 44px;
+                box-sizing: border-box;
+                display: inline-flex;
+                align-items: center;
+                gap: 8px;
+                border-radius: 11px;
+                transition: background-color 0.3s ease, color 0.25s ease, box-shadow 0.3s ease;
 
                 &:link {
-                    color: #FFF;
+                    color: var(--theme-text);
                 }
 
                 &:hover {
-                    color: #FFF;
-                    background: rgba(255, 255, 255, 0.25);
+                    color: var(--theme-text);
+                    @if $is_light_theme {
+                        background: rgba(29, 28, 22, 0.05);
+                    } @else {
+                        background: rgba(255, 255, 255, 0.08);
+                    }
                     margin: 0;
                 }
 
                 &.active {
-                    color: #FFF;
+                    color: var(--theme-text);
+                    border: none;
+                    padding: 14px 14px;
+                    @if $is_light_theme {
+                        background: rgba(29, 28, 22, 0.04);
+                    } @else {
+                        background: rgba(255, 255, 255, 0.06);
+                    }
+                    box-shadow: inset 0 -2px 0 0 var(--theme-accent);
+                }
 
-                    border: 5px solid transparent;
-                    border-bottom: 5px solid $highlight_blue;
-                    padding: 9px 2px;
+                .nav-item-icon {
+                    font-size: 0.95em;
+                    opacity: 0.92;
+                }
+
+                .nav-item-label {
+                    vertical-align: middle;
                 }
 
                 .nav-expand {
@@ -174,28 +208,40 @@ nav {
                 position: absolute;
                 left: 5px;
                 display: none;
-                color: #fff;
-                background: #231f20;
+                color: var(--theme-text);
+                background: var(--theme-card);
                 margin: 0 !important;
-                box-shadow: 2px 2px 4px rgba(0, 0, 0, 0.4);
-
-                li {
-                    a.active {
-                        border: none;
-                        border-left: 5px solid $highlight_blue;
-                    }
+                @if $is_light_theme {
+                    box-shadow: 0 8px 24px rgba(29, 28, 22, 0.08);
+                } @else {
+                    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
                 }
+                border: 1px solid var(--theme-border);
+                border-radius: 0 10px 10px 10px;
+                overflow: hidden;
 
                 li {
                     display: block;
 
                     a, button {
+                        color: var(--theme-text);
                         padding: 8px 20px 8px 8px !important;
                         font-size: 0.8em;
                         line-height: 18px;
                         display: block;
-                        border-left: 4px solid $highlight_blue;
+                        border-left: 4px solid transparent;
                         white-space: nowrap;
+                        border-radius: 0;
+
+                        &.active {
+                            border: none;
+                            border-left: 4px solid var(--theme-accent) !important;
+                            @if $is_light_theme {
+                                background: rgba(29, 28, 22, 0.04);
+                            } @else {
+                                background: rgba(255, 255, 255, 0.06);
+                            }
+                        }
                     }
                 }
             }
@@ -233,7 +279,7 @@ nav {
         display: inline-block;
         height: 32px;
         margin-right: 1px;
-        border-right: 3px solid rgba(255, 255, 255, 0.15);
+        border-right: 1px solid var(--theme-border);
     }
 }
 
@@ -251,15 +297,15 @@ nav {
         display: block;
         line-height: 26px;
         font-size: 2em;
-        color: #FFF;
+        color: var(--theme-text);
         padding: 0 0.25em;
         margin: 4px 0.25em;
         white-space: nowrap;
         float: left;
 
         &.hover {
-            color: #4db7fe;
-            text-shadow: 0 0 5px $highlight_blue;
+            color: var(--theme-accent);
+            text-shadow: none;
             transition-duration: 0.25s;
         }
     }
@@ -270,7 +316,7 @@ nav {
         margin: 0;
         position: fixed;
         top: 36px;
-        background: #231f20;
+        background: var(--theme-page-bg);
         bottom: 0;
         width: 8em;
         left: 0;
@@ -281,9 +327,11 @@ nav {
 
         li {
             display: block;
+            color: var(--theme-text);
 
             a {
                 display: block;
+                color: var(--theme-text);
 
                 .nav-expand {
                     float: right;
@@ -328,6 +376,198 @@ nav {
             ul {
                 left: 0 !important;
             }
+        }
+    }
+}
+
+// Right cluster: theme | settings (report + lang) | [divider] | auth (anon) | account menu
+#user-links.nav-user-toolbar {
+    display: inline-flex;
+    align-items: center;
+    // Never wrap: a second row drops "Hello, …" under the nav bar (looks broken).
+    flex-wrap: nowrap;
+    column-gap: 10px;
+    color: var(--theme-text-muted);
+    padding-left: 6px;
+    padding-right: 8px;
+
+    .nav-toolbar-settings {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .nav-report-issue {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 36px;
+        height: 36px;
+        margin: 0 !important;
+        border-radius: 10px;
+        border: 1px solid transparent;
+        box-sizing: border-box;
+        text-decoration: none;
+        color: var(--theme-text-muted);
+        transition: background-color 0.3s ease, color 0.25s ease, border-color 0.3s ease;
+
+        .fa {
+            font-size: 1rem;
+        }
+
+        &:hover {
+            @if $is_light_theme {
+                background: rgba(29, 28, 22, 0.06);
+                color: var(--theme-accent);
+            } @else {
+                background: rgba(255, 255, 255, 0.08);
+                color: var(--theme-accent);
+            }
+            border-color: var(--theme-border);
+        }
+    }
+
+    .nav-lang-switch {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+    }
+
+    .nav-flag {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 28px;
+        height: 28px;
+        margin: 0 !important;
+        padding: 0;
+        border-radius: 50%;
+        border: 1px solid transparent;
+        box-sizing: border-box;
+        text-decoration: none;
+        overflow: hidden;
+        transition:
+            filter 0.3s ease,
+            opacity 0.3s ease,
+            box-shadow 0.3s ease,
+            border-color 0.3s ease;
+
+        img {
+            display: block;
+            width: 22px;
+            height: 22px;
+            border-radius: 50%;
+            object-fit: cover;
+        }
+
+        &:not(.active) {
+            filter: grayscale(100%);
+            opacity: 0.45;
+        }
+
+        &.active {
+            opacity: 1;
+            filter: none;
+            border-color: var(--theme-border-strong);
+            box-shadow: 0 0 0 2px var(--theme-accent);
+        }
+
+        &:hover {
+            opacity: 1;
+            filter: grayscale(30%);
+        }
+    }
+
+    .nav-toolbar-divider {
+        display: inline-block;
+        width: 1px;
+        height: 26px;
+        flex-shrink: 0;
+        align-self: center;
+        background: var(--theme-border);
+        opacity: 0.9;
+    }
+
+    .nav-toolbar-auth {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .nav-btn-login {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 7px 14px;
+        border-radius: 10px;
+        border: 1px solid var(--theme-border);
+        font-weight: 500;
+        font-size: 13px;
+        line-height: 1.2;
+        color: var(--theme-text);
+        background: transparent;
+        text-decoration: none;
+        transition: background 0.3s ease, border-color 0.3s ease, opacity 0.25s ease;
+
+        &:hover {
+            @if $is_light_theme {
+                background: rgba(29, 28, 22, 0.05);
+            } @else {
+                background: rgba(255, 255, 255, 0.06);
+            }
+            border-color: var(--theme-border-strong);
+        }
+    }
+
+    .nav-btn-signup {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 7px 16px;
+        border-radius: 10px;
+        font-weight: 600;
+        font-size: 13px;
+        line-height: 1.2;
+        border: 1px solid transparent;
+        text-decoration: none;
+        transition: filter 0.2s ease, transform 0.15s ease;
+
+        @if $is_light_theme {
+            color: #fff !important;
+            background: var(--theme-text);
+        } @else {
+            color: #121212 !important;
+            background: var(--theme-accent);
+        }
+
+        &:hover {
+            filter: brightness(1.08);
+        }
+
+        &:active {
+            transform: scale(0.98);
+        }
+    }
+
+    > ul {
+        margin: 0;
+        flex-shrink: 0;
+        display: flex;
+        align-items: center;
+    }
+
+    > ul > li > a > span {
+        border-radius: 10px;
+        border: 1px solid transparent;
+        transition: background 0.15s ease, border-color 0.15s ease;
+
+        &:hover {
+            @if $is_light_theme {
+                background: rgba(29, 28, 22, 0.05);
+            } @else {
+                background: rgba(255, 255, 255, 0.06);
+            }
+            border-color: var(--theme-border);
         }
     }
 }

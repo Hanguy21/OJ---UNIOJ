@@ -10,6 +10,7 @@ from django.contrib.auth.password_validation import get_default_password_validat
 from django.db import transaction
 from django.forms import ChoiceField, ModelChoiceField
 from django.shortcuts import render
+from django.urls import reverse
 from django.utils.translation import gettext, gettext_lazy as _, ngettext
 from registration import signals
 from registration.backends.default.views import (ActivationView as OldActivationView,
@@ -18,6 +19,7 @@ from registration.forms import RegistrationForm
 from registration.users import UserModel
 from sortedm2m.forms import SortedMultipleChoiceField
 
+from judge.forms import CustomAuthenticationForm
 from judge.models import Language, Organization, Profile, TIMEZONE
 from judge.utils.recaptcha import ReCaptchaField, ReCaptchaWidget
 from judge.utils.subscription import Subscription, newsletter_id
@@ -78,7 +80,24 @@ class RegistrationView(OldRegistrationView):
         kwargs['TIMEZONE_MAP'] = settings.TIMEZONE_MAP
         kwargs['password_validators'] = get_default_password_validators()
         kwargs['tos_url'] = settings.TERMS_OF_SERVICE_URL
-        return super(RegistrationView, self).get_context_data(**kwargs)
+        context = super(RegistrationView, self).get_context_data(**kwargs)
+        form = context.get('form')
+        if form is not None:
+            # Jinja2 + BoundForm: avoid iterating form.errors / non_field_errors in templates (method/proxy quirks).
+            context['non_field_error_list'] = list(form.non_field_errors())
+            context['form_has_errors'] = bool(form.errors)
+        else:
+            context['non_field_error_list'] = []
+            context['form_has_errors'] = False
+
+        # Same OAuth availability as login (keys in settings); used for “Continue with Google”, etc.
+        auth_flags = CustomAuthenticationForm()
+        context['has_google_auth'] = auth_flags.has_google_auth
+        context['has_facebook_auth'] = auth_flags.has_facebook_auth
+        context['has_github_auth'] = auth_flags.has_github_auth
+        context['social_auth_next'] = self.request.GET.get('next') or reverse('home')
+
+        return context
 
     @transaction.atomic
     def register(self, form):

@@ -42,7 +42,7 @@
 
 {% block body %}
     {% block before_posts %}{% endblock %}
-    <div id="mobile" class="tabs">
+    <div id="mobile" class="tabs blog-mobile-tabs">
         <ul>
             <li id="blog-tab" class="tab active"><a href="#">
                 <i class="tab-icon fa fa-info-circle"></i> {{ _('Blog') }}
@@ -50,10 +50,10 @@
             <li id="event-tab" class="tab"><a href="#"><i class="tab-icon fa fa-rss"></i> {{ _('Events') }}</a></li>
         </ul>
     </div>
-    <div id="blog-container">
-        <div class="blog-content sidebox">
+    <div id="blog-container" class="blog-home-modern">
+        <div class="blog-content sidebox blog-feed-card">
             {% include "blog/blog-list-tabs.html" %}
-            <div class="sidebox-content" style="border: unset;">
+            <div class="sidebox-content blog-feed-inner">
                 {% for post in posts %}
                     {% include "blog/blog-post.html" %}
                 {% endfor %}

@@ -8,11 +8,6 @@
         }
         </style>
     </noscript>
-    <style>
-        #problem-table th {
-            padding: 0;
-        }
-    </style>
 {% endblock %}
 
 {% block js_media %}
@@ -125,7 +120,7 @@
         <div class="top-pagination-bar">{% include "list-pages.html" %}</div>
     {% endif %}
 
-    <div id="common-content">
+    <div id="common-content" class="problem-list-page">
         {% block before_table %}{% endblock %}
         <div id="content-right" class="problems">
             <div class="info-float">
@@ -144,7 +139,8 @@
                 {% endif %}
             </div>
         </div>
-        <div id="content-left" class="problems h-scrollable-table">
+        <div id="content-left" class="problems problem-list-main h-scrollable-table">
+            <div class="problem-table-card">
             <table id="problem-table" class="table striped">
                 <thead>
                 <tr>
@@ -253,6 +249,7 @@
                 {% endfor %}
                 </tbody>
             </table>
+            </div>
         </div>
     </div>
    {% if page_obj.has_other_pages() %}

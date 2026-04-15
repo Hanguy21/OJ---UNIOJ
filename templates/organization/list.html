@@ -38,7 +38,7 @@
 {% endmacro %}
 
 {% block body %}
-    <div class="content-description">
+    <div class="content-description organization-list-page">
         {% if request.user.is_authenticated %}
             {% with orgs=request.profile.organizations.all() %}
                 {% if orgs %}

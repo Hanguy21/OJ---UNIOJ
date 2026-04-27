@@ -713,9 +713,11 @@ def create_problem(problem_meta):
             problem=problem,
             is_public=False,
             publish_on=timezone.now(),
-            content=solution_content,
+            solution_language_key='CPP17',
+            content='',
         )
         solution.save()
+        solution.save_content_text(solution_content)
         solution.authors.set(problem_meta['authors'])
 
     with open(problem_meta['zipfile'], 'rb') as f:

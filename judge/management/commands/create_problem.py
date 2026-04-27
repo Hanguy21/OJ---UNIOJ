@@ -1,6 +1,7 @@
 from django.core.management.base import BaseCommand
 
 from judge.models import Problem, ProblemGroup, ProblemType
+from judge.models.problem import ProblemTestcaseAccess
 
 
 class Command(BaseCommand):
@@ -19,5 +20,6 @@ class Command(BaseCommand):
         problem.name = options['name']
         problem.description = options['body']
         problem.group = ProblemGroup.objects.get(name=options['group'])
+        problem.testcase_visibility_mode = ProblemTestcaseAccess.ALWAYS
         problem.types = [ProblemType.objects.get(name=options['type'])]
         problem.save()

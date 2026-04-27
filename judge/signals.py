@@ -1,5 +1,7 @@
 import errno
 import os
+import re
+from datetime import timedelta
 from typing import Optional
 
 from django.conf import settings
@@ -8,14 +10,18 @@ from django.contrib.flatpages.models import FlatPage
 from django.core.cache import cache
 from django.core.cache.utils import make_template_fragment_key
 from django.db import transaction
+from django.db.models import F, Max, Q
 from django.db.models.signals import m2m_changed, post_delete, post_save
 from django.dispatch import receiver
+from django.utils import timezone
 from registration.models import RegistrationProfile
 from registration.signals import user_registered
 
 from judge.caching import finished_submission
 from judge.models import BlogPost, Comment, Contest, ContestAnnouncement, ContestSubmission, EFFECTIVE_MATH_ENGINES, \
-    Judge, Language, License, MiscConfig, Organization, Problem, Profile, Submission, WebAuthnCredential
+    Judge, Language, License, MiscConfig, Organization, Problem, Profile, RoadmapLevel, RoadmapLevelContest, \
+    Submission, WebAuthnCredential
+from judge.models.contest import ContestProblem
 from judge.tasks import on_new_comment
 from judge.views.register import RegistrationView
 
@@ -47,6 +53,116 @@ def unlink_if_exists(file):
     except OSError as e:
         if e.errno != errno.ENOENT:
             raise
+
+
+LEVEL_TYPE_PATTERN = re.compile(r'^\s*level\s*(\d+)\b', re.IGNORECASE)
+
+
+def _extract_level_numbers(problem):
+    levels = set()
+    for value in problem.types.values_list('full_name', flat=True):
+        match = LEVEL_TYPE_PATTERN.match(value or '')
+        if match:
+            levels.add(int(match.group(1)))
+    return sorted(levels)
+
+
+def _build_level_contest_key(level_number):
+    base = f'level_{level_number}_luyen_tap_tong_hop'
+    candidate = base[:32]
+    counter = 2
+    while Contest.objects.filter(key=candidate).exists():
+        suffix = f'_{counter}'
+        candidate = f'{base[:32 - len(suffix)]}{suffix}'
+        counter += 1
+    return candidate
+
+
+def _pin_contest_to_top(level, contest):
+    RoadmapLevelContest.objects.filter(level=level).exclude(contest=contest).update(order=F('order') + 1)
+    RoadmapLevelContest.objects.update_or_create(
+        level=level,
+        contest=contest,
+        defaults={'order': 0},
+    )
+
+
+@transaction.atomic
+def _sync_level_contest_and_roadmap(level_number):
+    now = timezone.now()
+    level_name = f'Level {level_number} - Luyện tập tổng hợp'
+    contest = Contest.objects.filter(name=level_name).order_by('id').first()
+    if contest is None:
+        contest = Contest.objects.create(
+            key=_build_level_contest_key(level_number),
+            name=level_name,
+            start_time=now,
+            end_time=now + timedelta(days=3650),
+            is_visible=True,
+            is_private=False,
+            is_organization_private=False,
+            use_clarifications=False,
+            show_submission_list=True,
+        )
+
+    level_pattern = rf'^\s*level\s*{level_number}\b'
+    level_problem_ids = list(
+        Problem.objects.filter(
+            Q(types__full_name__iregex=level_pattern) | Q(types__name__iregex=level_pattern)
+        ).distinct().order_by('code').values_list('id', flat=True)
+    )
+    if level_problem_ids:
+        problem_points = {
+            row['id']: max(0, int(round(row['points'] or 0)))
+            for row in Problem.objects.filter(id__in=level_problem_ids).values('id', 'points')
+        }
+        problem_partial = {
+            row['id']: bool(row['partial'])
+            for row in Problem.objects.filter(id__in=level_problem_ids).values('id', 'partial')
+        }
+        existing_ids = set(
+            ContestProblem.objects.filter(contest=contest, problem_id__in=level_problem_ids)
+            .values_list('problem_id', flat=True)
+        )
+        missing_ids = [problem_id for problem_id in level_problem_ids if problem_id not in existing_ids]
+        if missing_ids:
+            next_order = ContestProblem.objects.filter(contest=contest).aggregate(m=Max('order'))['m'] or 0
+            ContestProblem.objects.bulk_create([
+                ContestProblem(
+                    contest=contest,
+                    problem_id=problem_id,
+                    points=problem_points.get(problem_id, 0),
+                    partial=problem_partial.get(problem_id, True),
+                    order=next_order + index + 1,
+                )
+                for index, problem_id in enumerate(missing_ids)
+            ])
+
+    roadmap_level, created = RoadmapLevel.objects.get_or_create(
+        level=level_number,
+        defaults={
+            'slug': f'level-{level_number}',
+            'title': f'Level {level_number}',
+            'subtitle': '',
+            'description': '',
+            'order': level_number,
+            'is_visible': True,
+        },
+    )
+    if created:
+        roadmap_level.callout_title = f'Level {level_number}'
+        roadmap_level.save(update_fields=['callout_title'])
+
+    _pin_contest_to_top(roadmap_level, contest)
+
+
+@receiver(m2m_changed, sender=Problem.types.through)
+def problem_level_type_sync(sender, instance, action, **kwargs):
+    if action not in ('post_add', 'post_remove', 'post_clear'):
+        return
+
+    for level_number in _extract_level_numbers(instance):
+        _sync_level_contest_and_roadmap(level_number)
 
 
 @receiver(post_save, sender=Problem)

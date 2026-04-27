@@ -13,6 +13,16 @@ from judge.models import Contest, ContestProblem, RoadmapLevel, RoadmapLevelCont
 from judge.views import TitledTemplateView
 
 
+def aggregate_level_contest_name(level_number):
+    return f'Level {level_number} - Luyện tập tổng hợp'
+
+
+def pinned_level_link(level):
+    return level.roadmap_contests.select_related('contest').filter(
+        contest__name=aggregate_level_contest_name(level.level),
+    ).order_by('id').first()
+
+
 def can_edit_roadmap(user):
     return user.is_authenticated and (
         user.has_perm('judge.roadmap_level_edit_mode') or
@@ -153,7 +163,14 @@ class RoadmapLevelDetail(TemplateView):
             ordered_ids = request.POST.get('ordered_ids', '')
             ids = [int(value) for value in ordered_ids.split(',') if value.isdigit()]
             lookup = {row.id: row for row in self.level.roadmap_contests.all()}
-            for index, row_id in enumerate(ids):
+            pinned = pinned_level_link(self.level)
+            pinned_id = pinned.id if pinned else None
+            if pinned_id is not None:
+                ids = [row_id for row_id in ids if row_id != pinned_id]
+                if pinned.order != 0:
+                    pinned.order = 0
+                    pinned.save(update_fields=['order'])
+            for index, row_id in enumerate(ids, start=1 if pinned_id is not None else 0):
                 row = lookup.get(row_id)
                 if row and row.order != index:
                     row.order = index
@@ -162,8 +179,17 @@ class RoadmapLevelDetail(TemplateView):
         elif action == 'remove':
             mapping_id = request.POST.get('mapping_id')
             if mapping_id and mapping_id.isdigit():
-                RoadmapLevelContest.objects.filter(level=self.level, id=int(mapping_id)).delete()
-                messages.success(request, _('Contest has been removed from this level.'))
+                mapping = RoadmapLevelContest.objects.select_related('contest').filter(
+                    level=self.level, id=int(mapping_id),
+                ).first()
+                if mapping and mapping.contest.name == aggregate_level_contest_name(self.level.level):
+                    messages.warning(
+                        request,
+                        _('This level aggregate contest is pinned and cannot be removed from roadmap.'),
+                    )
+                else:
+                    RoadmapLevelContest.objects.filter(level=self.level, id=int(mapping_id)).delete()
+                    messages.success(request, _('Contest has been removed from this level.'))
         target = reverse('roadmap_level_detail', kwargs={'slug': self.level.slug})
         if keep_edit_mode:
             target = f'{target}?edit=1'

@@ -115,7 +115,7 @@ msgid "Format"
 msgstr ""
 
 msgid "Rating"
-msgstr ""
+msgstr "Độ khó"
 
 msgid "Access"
 msgstr "Truy cập"
@@ -1330,7 +1330,7 @@ msgid "rank"
 msgstr "hạng"
 
 msgid "rating"
-msgstr ""
+msgstr "độ khó"
 
 msgid "raw rating"
 msgstr ""
@@ -5057,6 +5057,15 @@ msgstr "Dạng bài"
 msgid "Point range"
 msgstr "Khoảng điểm"
 
+msgid "Rating range"
+msgstr "Khoảng độ khó"
+
+msgid "Problem rating (difficulty), for example 800, 1100, 1500."
+msgstr "Độ khó của bài toán, ví dụ 800, 1100, 1500."
+
+msgid "Difficulty rating of this problem. Higher rating means harder problem."
+msgstr "Độ khó của bài toán này. Độ khó càng cao thì bài càng khó."
+
 msgid "Random"
 msgstr "Ngẫu nhiên"
 
@@ -6193,7 +6202,7 @@ msgid "Rank by rating:"
 msgstr "Hạng rating:"
 
 msgid "Rating:"
-msgstr ""
+msgstr "Độ khó:"
 
 msgid "Min. rating:"
 msgstr ""

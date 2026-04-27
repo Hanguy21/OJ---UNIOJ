@@ -188,12 +188,12 @@
                 {{ submission.case_points|floatformat(-3) }}/{{ submission.case_total|floatformat(0) }}
                 {% if request.in_contest and submission.contest_or_none %}
                     {% with contest=submission.contest_or_none %}
-                        {% set points=contest.points|roundfloat(3) %}
-                        {% set total=contest.problem.points|floatformat(-1) %}
+                        {% set points=(contest.points / 1000)|roundfloat(3) %}
+                        {% set total=(contest.problem.points / 1000)|floatformat(3) %}
                         ({{ _('%(points)s/%(total)s points', points=points, total=total) }})
                     {% endwith %}
                 {% else %}
-                    {% with points=submission.points|floatformat(3), total=submission.problem.points|floatformat(3) %}
+                    {% with points=(submission.points / 1000)|floatformat(3), total=(submission.problem.points / 1000)|floatformat(3) %}
                         ({{ _('%(points)s/%(total)s points', points=points, total=total) }})
                     {% endwith %}
                 {% endif %}

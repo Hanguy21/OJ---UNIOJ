@@ -248,21 +248,21 @@ class Profile(models.Model):
     _pp_table = [pow(settings.DMOJ_PP_STEP, i) for i in range(settings.DMOJ_PP_ENTRIES)]
 
     def calculate_points(self, table=_pp_table):
-        from judge.models import Problem
-        public_problems = Problem.get_public_problems()
         data = (
-            public_problems.filter(submission__user=self, submission__points__isnull=False)
-                           .annotate(max_points=Max('submission__points')).order_by('-max_points')
+            self.submission_set.filter(points__isnull=False)
+                           .values('problem_id').annotate(max_points=Max('points')).order_by('-max_points')
                            .values_list('max_points', flat=True).filter(max_points__gt=0)
         )
+        normalized_data = [value / 1000.0 for value in data]
         bonus_function = settings.DMOJ_PP_BONUS_FUNCTION
-        points = sum(data)
+        points = sum(normalized_data)
         problems = (
-            public_problems.filter(submission__user=self, submission__result='AC',
-                                   submission__case_points__gte=F('submission__case_total'))
-            .values('id').distinct().count()
+            self.submission_set.filter(
+                result='AC',
+                case_points__gte=F('case_total'),
+            ).values('problem_id').distinct().count()
         )
-        pp = sum(x * y for x, y in zip(table, data)) + bonus_function(problems)
+        pp = sum(x * y for x, y in zip(table, normalized_data)) + bonus_function(problems)
         if not float_compare_equal(self.points, points) or \
            problems != self.problem_count or \
            not float_compare_equal(self.performance_points, pp):

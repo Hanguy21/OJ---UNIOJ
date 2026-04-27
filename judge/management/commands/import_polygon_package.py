@@ -19,8 +19,9 @@ from django.urls import reverse
 from django.utils import timezone, translation
 from lxml import etree as ET
 
-from judge.models import Language, Problem, ProblemData, ProblemGroup, ProblemTestCase, ProblemTranslation, \
-    ProblemType, Profile, Solution
+from judge.models import Language, Problem, ProblemData, ProblemGroup, ProblemTestCase, \
+    ProblemTranslation, ProblemType, Profile, Solution
+from judge.models.problem import ProblemTestcaseAccess
 from judge.utils.problem_data import ProblemDataCompiler
 from judge.views.widgets import django_uploader
 
@@ -683,6 +684,7 @@ def create_problem(problem_meta):
         memory_limit=problem_meta['memory_limit'],
         description=problem_meta['description'],
         partial=problem_meta['partial'],
+        testcase_visibility_mode=ProblemTestcaseAccess.ALWAYS,
         group=ProblemGroup.objects.order_by('id').first(),  # Uncategorized
         points=0.0,
     )

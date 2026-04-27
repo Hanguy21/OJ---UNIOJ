@@ -38,6 +38,7 @@ from judge.comments import CommentedDetailView
 from judge.forms import LanguageLimitFormSet, PolygonImportForm, ProblemCloneForm, ProblemCreateForm, ProblemEditForm, ProblemSubmitForm
 from judge.models import ContestSubmission, Judge, Language, Problem, ProblemGroup, \
     ProblemTranslation, ProblemType, RuntimeVersion, Solution, Submission, SubmissionSource
+from judge.models.problem import ProblemTestcaseAccess
 from judge.tasks import on_new_problem
 from judge.template_context import misc_config
 from judge.utils.diggpaginator import DiggPaginator
@@ -938,6 +939,7 @@ class ProblemCreate(PermissionRequiredMixin, TitleMixin, CreateView):
         initial['description'] = misc_config(self.request)['misc_config']['description_example']
         initial['memory_limit'] = 262144  # 256 MB
         initial['partial'] = True
+        initial['testcase_visibility_mode'] = ProblemTestcaseAccess.ALWAYS
         return initial
 
 

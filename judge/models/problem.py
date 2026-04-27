@@ -177,9 +177,9 @@ class Problem(models.Model):
                                                validators=[MinValueValidator(settings.DMOJ_PROBLEM_MIN_MEMORY_LIMIT),
                                                            MaxValueValidator(settings.DMOJ_PROBLEM_MAX_MEMORY_LIMIT)])
     short_circuit = models.BooleanField(default=False)
-    points = models.FloatField(verbose_name=_('points'),
-                               help_text=_('Points awarded for problem completion. '
-                                           "Points are displayed with a 'p' suffix if partial."),
+    points = models.FloatField(verbose_name=_('rating'),
+                               help_text=_('Difficulty rating of this problem. '
+                                           'Higher rating means harder problem.'),
                                validators=[MinValueValidator(settings.DMOJ_PROBLEM_MIN_PROBLEM_POINTS)])
     partial = models.BooleanField(verbose_name=_('allows partial points'), default=False)
     allowed_languages = models.ManyToManyField(Language, verbose_name=_('allowed languages'),

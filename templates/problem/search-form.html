@@ -57,7 +57,7 @@
                 </select>
             </div>
             {% if point_values %}
-                <div class="form-label">{{ _('Point range') }}</div>
+                <div class="form-label">{{ _('Rating range') }}</div>
                 <div id="point-slider"></div>
             {% endif %}
             <input id="point-start" type="hidden" name="point_start" {% if point_start and point_start != point_values.min %}value="{{ point_start }}"{% else %}disabled{% endif %}>

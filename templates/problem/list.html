@@ -166,7 +166,7 @@
                         </th>
                     {% endif %}
                     <th class="points">
-                        <a href="{{ sort_links.points }}">{{ _('Points') }}{{ sort_order.points }}</a>
+                        <a href="{{ sort_links.points }}">{{ _('Rating') }}{{ sort_order.points }}</a>
                     </th>
                     <th class="ac-rate">
                         <a href="{{ sort_links.ac_rate }}">{{ _('%% AC') }}{{ sort_order.ac_rate }}</a>
@@ -229,7 +229,7 @@
                                 {% endfor %}
                             </td>
                         {% endif %}
-                        <td class="p">{{ problem.points|floatformat(2) }}</td>
+                        <td class="p">{{ problem.points|floatformat(0) }}</td>
                         <td class="ac-rate">{{ problem.ac_rate|floatformat(1) }}%</td>
                         <td class="users">
                             <a href="{{ url('ranked_submissions', problem.code) }}">

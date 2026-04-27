@@ -21,8 +21,9 @@ from django.utils.text import slugify
 from lxml import etree as ET
 
 from judge.management.commands import import_polygon_package as polygon_import
-from judge.models import Language, Problem, ProblemData, ProblemGroup, ProblemTestCase, ProblemTranslation, ProblemType, \
-    Profile, Solution
+from judge.models import Language, Problem, ProblemData, ProblemGroup, ProblemTestCase, \
+    ProblemTranslation, ProblemType, Profile, Solution
+from judge.models.problem import ProblemTestcaseAccess
 from judge.utils.problem_data import ProblemDataCompiler
 
 
@@ -432,6 +433,7 @@ class Command(BaseCommand):
         problem.memory_limit = problem_meta["memory_limit"]
         problem.description = problem_meta["description"]
         problem.partial = problem_meta["partial"]
+        problem.testcase_visibility_mode = ProblemTestcaseAccess.ALWAYS
         if problem.group_id is None:
             problem.group = ProblemGroup.objects.order_by("id").first()
         problem.save()
@@ -553,6 +555,24 @@ class Command(BaseCommand):
 
         if mapped_types:
             problem.types.set(mapped_types)
+        rating = self._extract_rating_from_tags(tags)
+        if rating is not None:
+            problem.points = rating
+            problem.save(update_fields=["points"])
+            self.stdout.write(f"Applied problem rating from Polygon tags: {rating}")
+
+    def _extract_rating_from_tags(self, tags):
+        for tag in tags:
+            value = str(tag or "").strip()
+            if not value:
+                continue
+            star_match = re.search(r"\*(\d{3,4})\b", value)
+            if star_match:
+                return float(int(star_match.group(1)))
+            plain_match = re.fullmatch(r"(\d{3,4})", value)
+            if plain_match:
+                return float(int(plain_match.group(1)))
+        return None
 
     def _get_or_create_problem_type(self, tag):
         tag = tag.strip()

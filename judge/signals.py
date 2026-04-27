@@ -3,6 +3,7 @@ import os
 from typing import Optional
 
 from django.conf import settings
+from django.contrib.auth.models import Group, User
 from django.contrib.flatpages.models import FlatPage
 from django.core.cache import cache
 from django.core.cache.utils import make_template_fragment_key
@@ -17,6 +18,20 @@ from judge.models import BlogPost, Comment, Contest, ContestAnnouncement, Contes
     Judge, Language, License, MiscConfig, Organization, Problem, Profile, Submission, WebAuthnCredential
 from judge.tasks import on_new_comment
 from judge.views.register import RegistrationView
+
+
+def ensure_unicorns_org_admin(org):
+    admin_user = User.objects.filter(username='admin').first()
+    if not admin_user:
+        return
+    try:
+        admin_profile = admin_user.profile
+    except Profile.DoesNotExist:
+        return
+    org.admins.add(admin_profile)
+    admin_profile.organizations.add(org)
+    org_admin_group, _ = Group.objects.get_or_create(name=getattr(settings, 'GROUP_PERMISSION_FOR_ORG_ADMIN', 'Org Admin'))
+    admin_user.groups.add(org_admin_group)
 
 
 def get_pdf_path(basename: str) -> Optional[str]:
@@ -146,6 +161,39 @@ def organization_admin_update(sender, instance, action, **kwargs):
         pks = kwargs.get('pk_set') or set()
         for profile in Profile.objects.filter(pk__in=pks):
             profile.organizations.add(instance)
+
+
+@receiver(m2m_changed, sender=User.groups.through)
+def unicorns_role_group_update(sender, instance, action, **kwargs):
+    if action != 'post_add':
+        return
+    unicorns_roles = {
+        getattr(settings, 'GROUP_UNI_STUDENT', 'uni-student'),
+        getattr(settings, 'GROUP_UNI_MENTOR', 'uni-mentor'),
+    }
+    added_group_ids = kwargs.get('pk_set') or set()
+    if not added_group_ids:
+        return
+    added_group_names = set(instance.groups.filter(pk__in=added_group_ids).values_list('name', flat=True))
+    if not (added_group_names & unicorns_roles):
+        return
+
+    org = Organization.objects.get_or_create(
+        slug=getattr(settings, 'DEFAULT_UNICORNS_ORG_SLUG', 'unicorns-edu'),
+        defaults={
+            'name': getattr(settings, 'DEFAULT_UNICORNS_ORG_NAME', 'Unicorns Edu'),
+            'short_name': 'UNICORNS',
+            'about': 'Default organization for Unicorns Edu students and mentors.',
+            'is_open': False,
+            'is_unlisted': True,
+        },
+    )[0]
+    ensure_unicorns_org_admin(org)
+    try:
+        profile = instance.profile
+    except Profile.DoesNotExist:
+        return
+    profile.organizations.add(org)
 
 
 @receiver(post_save, sender=MiscConfig)

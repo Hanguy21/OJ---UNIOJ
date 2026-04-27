@@ -722,6 +722,10 @@ WEBAUTHN_RP_ID = None
 DESCRIPTION_MAX_LENGTH = 200
 
 GROUP_PERMISSION_FOR_ORG_ADMIN = 'Org Admin'
+GROUP_UNI_STUDENT = 'uni-student'
+GROUP_UNI_MENTOR = 'uni-mentor'
+DEFAULT_UNICORNS_ORG_SLUG = 'unicorns-edu'
+DEFAULT_UNICORNS_ORG_NAME = 'Unicorns Edu'
 
 try:
     with open(os.path.join(os.path.dirname(__file__), 'local_settings.py')) as f:

@@ -217,6 +217,44 @@ def pandoc_get_version():
     return tuple(map(int, parts))
 
 
+def parse_reference_solution(problem_meta, package):
+    problem_meta['model_solution_code'] = ''
+    solution_files = [name for name in package.namelist()
+                      if name.startswith('solutions/') and not name.endswith('/') and not name.endswith('.desc')]
+    if not solution_files:
+        return
+
+    descriptors = {}
+    for name in package.namelist():
+        if name.startswith('solutions/') and name.endswith('.desc'):
+            try:
+                descriptors[name[:-5]] = package.read(name).decode('utf-8', 'replace')
+            except KeyError:
+                continue
+
+    bad_markers = ('wrong', 'wa', 'tle', 'rte', 'stress', 'generator', 'gen', 'checker')
+
+    def score(path):
+        value = 0
+        base = os.path.basename(path).lower()
+        desc = descriptors.get(path, '')
+        if 'Tag: MAIN' in desc:
+            value += 100
+        if base.startswith('sol') or 'solution' in base:
+            value += 30
+        if any(marker in base for marker in bad_markers):
+            value -= 80
+        return value
+
+    chosen = max(solution_files, key=score)
+    try:
+        problem_meta['model_solution_code'] = package.read(chosen).decode('utf-8')
+    except UnicodeDecodeError:
+        problem_meta['model_solution_code'] = package.read(chosen).decode('utf-8', 'replace')
+
+    print(f'Using reference solution source: {chosen}')
+
+
 def parse_assets(problem_meta, root, package):
     # Parse interactor
     interactor = root.find('.//interactor')
@@ -663,13 +701,22 @@ def create_problem(problem_meta):
             description=tran['description'],
         ).save()
 
-    if problem_meta['tutorial'] != '':
-        Solution(
+    solution_content = ''
+    model_solution_code = (problem_meta.get('model_solution_code') or '').strip()
+    if model_solution_code:
+        solution_content = '```cpp\n' + model_solution_code + '\n```'
+    elif problem_meta['tutorial'] != '':
+        solution_content = problem_meta['tutorial']
+
+    if solution_content:
+        solution = Solution(
             problem=problem,
             is_public=False,
             publish_on=timezone.now(),
-            content=problem_meta['tutorial'],
-        ).save()
+            content=solution_content,
+        )
+        solution.save()
+        solution.authors.set(problem_meta['authors'])
 
     with open(problem_meta['zipfile'], 'rb') as f:
         problem_data = ProblemData(
@@ -810,6 +857,7 @@ class Command(BaseCommand):
             parse_assets(problem_meta, root, package)
             parse_tests(problem_meta, root, package)
             parse_statements(problem_meta, root, package)
+            parse_reference_solution(problem_meta, package)
             create_problem(problem_meta)
         except Exception:
             # Remove imported images

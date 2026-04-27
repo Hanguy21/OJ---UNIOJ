@@ -8,7 +8,7 @@
                     {%- if submission.status in ('IE', 'CE', 'AB') -%}
                         ---
                     {%- else -%}
-                        {{ submission.case_points|floatformat(-3) }} / {{ submission.case_total|floatformat(0) }}
+                        {{ submission.case_points|floatformat(-3) }}/{{ submission.case_total|floatformat(0) }}
                     {%- endif -%}
                 {%- else -%}
                     <i class="fa fa-spinner fa-pulse grading-spinner"></i>
@@ -16,7 +16,9 @@
             </div>
 
             <div class="state">
-                <span title="{{ submission.long_status }}" class="status">{{ submission.short_status }}</span> |
+                <span aria-hidden="true">•</span>
+                <span title="{{ submission.long_status }}" class="status">{{ submission.short_status }}</span>
+                <span aria-hidden="true">•</span>
                 <span class="language">{{ submission.language.short_display_name }}</span>
             </div>
     {% if can_view %}

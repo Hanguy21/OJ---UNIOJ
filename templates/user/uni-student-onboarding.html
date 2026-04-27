@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+
+{% block title_row %}{% endblock %}
+{% block title_ruler %}{% endblock %}
+
+{% block media %}
+    {% include "timezone/media-css.html" %}
+    {{ form_profile.media.css }}
+{% endblock %}
+
+{% block js_media %}
+    {{ form_profile.media.js }}
+{% endblock %}
+
+{% block body %}
+    <div class="unicorns-onboarding">
+        <div class="unicorns-onboarding-card">
+            <h1 class="unicorns-onboarding__title">{{ title }}</h1>
+            <p class="unicorns-onboarding__lead">{{ _('Please complete the information below to continue using the site.') }}</p>
+            <form method="post" class="unicorns-onboarding-form">
+                {% csrf_token %}
+                <input type="hidden" name="next" value="{{ next }}">
+
+                <h2 class="unicorns-onboarding__section">{{ _('Account') }}</h2>
+                <div class="unicorns-onboarding-field">
+                    {{ form_user.email.label_tag() }}
+                    {{ form_user.email }}
+                    {% if form_user.email.errors %}<div class="errorlist">{{ form_user.email.errors|join(' ') }}</div>{% endif %}
+                </div>
+
+                <h2 class="unicorns-onboarding__section">{{ _('Profile') }}</h2>
+                <div class="unicorns-onboarding-field">
+                    {{ form_profile.timezone.label_tag() }}
+                    {{ form_profile.timezone }}
+                    {% if form_profile.timezone.errors %}<div class="errorlist">{{ form_profile.timezone.errors|join(' ') }}</div>{% endif %}
+                </div>
+                <div class="unicorns-onboarding-field">
+                    {{ form_profile.language.label_tag() }}
+                    {{ form_profile.language }}
+                    {% if form_profile.language.errors %}<div class="errorlist">{{ form_profile.language.errors|join(' ') }}</div>{% endif %}
+                </div>
+                <div class="unicorns-onboarding-field">
+                    {{ form_profile.about.label_tag() }}
+                    {{ form_profile.about }}
+                    {% if form_profile.about.errors %}<div class="errorlist">{{ form_profile.about.errors|join(' ') }}</div>{% endif %}
+                </div>
+
+                <div class="unicorns-onboarding-actions">
+                    <button type="submit" class="button">{{ _('Save and continue') }}</button>
+                </div>
+            </form>
+        </div>
+    </div>
+{% endblock %}

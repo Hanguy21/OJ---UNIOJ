@@ -421,6 +421,7 @@ class Command(BaseCommand):
             polygon_import.parse_assets(problem_meta, root, package)
             polygon_import.parse_tests(problem_meta, root, package)
             polygon_import.parse_statements(problem_meta, root, package)
+            polygon_import.parse_reference_solution(problem_meta, package)
             self._apply_problem_update(existing_problem, problem_meta)
         finally:
             problem_meta["tmp_dir"].cleanup()
@@ -448,14 +449,29 @@ class Command(BaseCommand):
                 description=tran["description"],
             )
 
-        tutorial = problem_meta.get("tutorial", "")
-        if tutorial:
-            Solution.objects.update_or_create(
-                problem=problem,
-                defaults={"is_public": False, "content": tutorial, "publish_on": timezone.now()},
-            )
+        solution_content = ""
+        model_solution_code = (problem_meta.get("model_solution_code") or "").strip()
+        if model_solution_code:
+            solution_content = "```cpp\n" + model_solution_code + "\n```"
         else:
-            Solution.objects.filter(problem=problem).delete()
+            tutorial = (problem_meta.get("tutorial") or "").strip()
+            if tutorial:
+                solution_content = tutorial
+
+        if solution_content:
+            solution, _ = Solution.objects.update_or_create(
+                problem=problem,
+                defaults={
+                    "is_public": False,
+                    "content": "",
+                    "publish_on": timezone.now(),
+                    "solution_language_key": "CPP17",
+                },
+            )
+            solution.save_content_text(solution_content)
+            solution.authors.set(problem_meta["authors"])
+        elif Solution.objects.filter(problem=problem).exists():
+            self.stdout.write("No reference solution source found in Polygon package; keeping existing solution.")
 
         with open(problem_meta["zipfile"], "rb") as f:
             problem_data, _ = ProblemData.objects.get_or_create(problem=problem)

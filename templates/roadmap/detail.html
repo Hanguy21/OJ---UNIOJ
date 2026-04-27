@@ -1,0 +1,262 @@
+{% extends "base.html" %}
+
+{% block title_row %}{% endblock %}
+{% block title_ruler %}{% endblock %}
+
+{% block body %}
+    <div class="roadmap-detail-page">
+        <aside class="roadmap-detail-sidebar">
+            <h2 class="roadmap-detail-sidebar__title">{{ _('Roadmap') }}</h2>
+            <nav class="roadmap-detail-sidebar__toc" aria-label="{{ _('Roadmap levels') }}">
+                <ul class="roadmap-level-nav">
+                    {% for level in roadmap_levels %}
+                        <li>
+                            <a href="{{ url('roadmap_level_detail', level.slug) }}"
+                               class="{% if level.id == roadmap_level.id %}active{% endif %}">
+                                <span class="badge">{{ _('Level %(level)s', level=level.level) }}</span>
+                                <span class="name">{{ level.title }}</span>
+                            </a>
+                        </li>
+                    {% endfor %}
+                </ul>
+            </nav>
+            <div class="roadmap-detail-sidebar__footer">
+                <a href="{{ url('roadmap_overview') }}" class="roadmap-detail-sidebar__back">
+                    <i class="fa fa-arrow-left" aria-hidden="true"></i>
+                    <span>{{ _('Back to roadmap grid') }}</span>
+                </a>
+                {% if can_edit_roadmap %}
+                    <a href="{{ url('admin:judge_roadmaplevel_changelist') }}" class="roadmap-admin-link roadmap-detail-sidebar__admin">
+                        <i class="fa fa-wrench" aria-hidden="true"></i>
+                        <span>{{ _('Admin') }}</span>
+                    </a>
+                {% endif %}
+            </div>
+        </aside>
+
+        <section class="roadmap-detail-main">
+            <header class="roadmap-module-header">
+                <div class="roadmap-module-header__text">
+                    <h1>{{ _('Level %(level)s', level=roadmap_level.level) }}</h1>
+                    {% if roadmap_level.subtitle %}
+                        <p class="roadmap-module-header__subtitle">{{ roadmap_level.subtitle }}</p>
+                    {% elif roadmap_level.title %}
+                        <p class="roadmap-module-header__subtitle">{{ roadmap_level.title }}</p>
+                    {% endif %}
+                </div>
+
+                {% if can_edit_roadmap %}
+                    <label class="roadmap-edit-switch">
+                        <input id="roadmap-edit-toggle" class="roadmap-edit-switch__input" type="checkbox"
+                               aria-label="{{ _('Edit mode') }}">
+                        <span class="roadmap-edit-switch__slider" aria-hidden="true"></span>
+                        <span class="roadmap-edit-switch__label">{{ _('Edit mode') }}</span>
+                    </label>
+                {% endif %}
+            </header>
+
+            <div class="roadmap-level-progress">
+                <span class="roadmap-level-progress__label">{{ _('%(percent)s%% Completed', percent=level_progress_percent) }}</span>
+                <div class="roadmap-level-progress__bar" {% if level_progress_total %}
+                     role="progressbar" aria-valuemin="0" aria-valuemax="{{ level_progress_total }}"
+                     aria-valuenow="{{ level_progress_solved }}" aria-label="{{ _('%(percent)s%% Completed', percent=level_progress_percent) }}"
+                     {% else %}aria-hidden="true"{% endif %}>
+                    <span style="width: {{ level_progress_percent }}%"></span>
+                </div>
+            </div>
+
+            {% if roadmap_level.callout_title or roadmap_level.callout_content %}
+                <article class="roadmap-callout roadmap-callout--minimal">
+                    {% if roadmap_level.callout_title %}
+                        <h2>{{ roadmap_level.callout_title }}</h2>
+                    {% endif %}
+                    {% if roadmap_level.callout_content %}
+                        <p>{{ roadmap_level.callout_content }}</p>
+                    {% endif %}
+                </article>
+            {% elif roadmap_level.description %}
+                <article class="roadmap-callout roadmap-callout--minimal">
+                    <p>{{ roadmap_level.description }}</p>
+                </article>
+            {% endif %}
+
+            <section class="roadmap-contest-list" aria-label="{{ _('Level contests') }}">
+                {% for entry in roadmap_entries %}
+                    <article class="roadmap-contest-row{% if entry.is_locked %} roadmap-contest-row--locked{% endif %}{% if entry.is_complete %} roadmap-contest-row--complete{% endif %}"
+                             style="--entry-progress: {{ entry.progress_percent }}%;"
+                             data-mapping-id="{{ entry.mapping_id }}" draggable="false">
+                        {% if not entry.is_locked %}
+                            <a href="{{ url('contest_view', entry.contest.key) }}"
+                               class="roadmap-contest-row__hit"
+                               aria-label="{{ _('Open %(name)s', name=entry.name) }}"></a>
+                        {% endif %}
+                        <span class="roadmap-contest-row__grip" aria-hidden="true">⋮⋮</span>
+                        <div class="roadmap-contest-row__inner">
+                            <div class="roadmap-contest-row__main">
+                                <h3>
+                                    {% if entry.is_complete %}
+                                        <i class="fa fa-check-circle roadmap-contest-row__done" aria-hidden="true" title="{{ _('Completed') }}"></i>
+                                    {% endif %}
+                                    <span>{{ entry.index }}. {{ entry.name }}</span>
+                                </h3>
+                                {% if entry.summary %}
+                                    <p>{{ entry.summary }}</p>
+                                {% endif %}
+                            </div>
+                            <div class="roadmap-contest-row__meta">
+                                <span class="roadmap-contest-row__tag"
+                                      title="{{ _('%(solved)s/%(total)s problems solved', solved=entry.solved_count, total=entry.problem_count) }}">
+                                    {{ _('%(percent)s%% (%(solved)s/%(total)s problems)',
+                                        percent=entry.progress_percent,
+                                        solved=entry.solved_count,
+                                        total=entry.problem_count) }}
+                                </span>
+                                {% if entry.is_locked %}
+                                    <span class="roadmap-contest-row__chevron" aria-hidden="true"><i class="fa fa-lock"></i></span>
+                                {% else %}
+                                    <span class="roadmap-contest-row__chevron" aria-hidden="true"><i class="fa fa-angle-right"></i></span>
+                                {% endif %}
+                                {% if can_edit_roadmap %}
+                                    <form method="post" class="roadmap-edit-only roadmap-contest-row__remove-form">
+                                        {% csrf_token %}
+                                        <input type="hidden" name="action" value="remove">
+                                        <input type="hidden" name="keep_edit_mode" value="1" class="js-keep-edit-mode">
+                                        <input type="hidden" name="mapping_id" value="{{ entry.mapping_id }}">
+                                        <button class="roadmap-contest-row__remove" type="submit">{{ _('Remove') }}</button>
+                                    </form>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </article>
+                {% else %}
+                    <p class="roadmap-empty-row">{{ _('No contest has been attached to this level yet.') }}</p>
+                {% endfor %}
+            </section>
+
+            {% if can_edit_roadmap %}
+                <section class="roadmap-edit-only roadmap-add-contest">
+                    <form method="post">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="add">
+                        <input type="hidden" name="keep_edit_mode" value="1" class="js-keep-edit-mode">
+                        <label for="roadmap-contest-select">{{ _('Add contest to this level') }}</label>
+                        <div class="roadmap-add-contest__row">
+                            <select id="roadmap-contest-select" name="contest_id">
+                                <option value="">{{ _('Select contest...') }}</option>
+                                {% for contest in available_contests %}
+                                    <option value="{{ contest.id }}">{{ contest.name }} ({{ contest.key }})</option>
+                                {% endfor %}
+                            </select>
+                            <button type="submit">{{ _('Add contest') }}</button>
+                        </div>
+                    </form>
+                </section>
+
+                <form id="roadmap-reorder-form" method="post" class="roadmap-edit-only">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="reorder">
+                    <input type="hidden" name="keep_edit_mode" value="1" class="js-keep-edit-mode">
+                    <input type="hidden" name="ordered_ids" value="">
+                </form>
+            {% endif %}
+        </section>
+    </div>
+{% endblock %}
+
+{% block bodyend %}
+    {{ super() }}
+    {% if can_edit_roadmap %}
+        <script>
+            $(function () {
+                var $page = $('.roadmap-detail-page');
+                var $toggle = $('#roadmap-edit-toggle');
+                var $rows = $('.roadmap-contest-row');
+                var $list = $('.roadmap-contest-list');
+                var $keepEditInputs = $('.js-keep-edit-mode');
+                var $contestSelect = $('#roadmap-contest-select');
+                var $indicator = $('<div class="roadmap-drop-indicator" aria-hidden="true"></div>');
+
+                function setEditMode(enabled) {
+                    $page.toggleClass('roadmap-edit-mode', enabled);
+                    $toggle.prop('checked', enabled);
+                    $toggle.attr('aria-pressed', enabled ? 'true' : 'false');
+                    $rows.attr('draggable', enabled ? 'true' : 'false');
+                    $keepEditInputs.val(enabled ? '1' : '0');
+                }
+
+                setEditMode({% if edit_mode_enabled %}true{% else %}false{% endif %});
+
+                $toggle.on('change', function () {
+                    setEditMode($toggle.is(':checked'));
+                });
+
+                if ($contestSelect.length) {
+                    $contestSelect.select2({
+                        theme: '{{ DMOJ_SELECT2_THEME }}',
+                        placeholder: '{{ _('Select contest...')|escapejs }}',
+                        minimumResultsForSearch: 0,
+                        width: '100%',
+                        language: {
+                            noResults: function () {
+                                return '{{ _('No contests found.')|escapejs }}';
+                            }
+                        },
+                        escapeMarkup: function (markup) {
+                            return markup;
+                        }
+                    }).css({'visibility': 'visible'});
+                }
+
+                var dragging = null;
+                $rows.on('dragstart', function (event) {
+                    if (!$page.hasClass('roadmap-edit-mode')) return;
+                    dragging = this;
+                    event.originalEvent.dataTransfer.setData('text/plain', String($(this).data('mapping-id')));
+                    event.originalEvent.dataTransfer.effectAllowed = 'move';
+                    $(this).addClass('is-dragging');
+                });
+                $rows.on('dragend', function () {
+                    $(this).removeClass('is-dragging');
+                    $indicator.detach();
+                });
+
+                $list.on('dragover', function (event) {
+                    if (!$page.hasClass('roadmap-edit-mode') || !dragging) return;
+                    event.preventDefault();
+
+                    var $target = $(event.target).closest('.roadmap-contest-row');
+                    if (!$target.length || $target[0] === dragging) {
+                        $list.append($indicator);
+                    } else {
+                        var midpoint = $target.offset().top + $target.outerHeight() / 2;
+                        if (event.originalEvent.clientY < midpoint) {
+                            $target.before($indicator);
+                        } else {
+                            $target.after($indicator);
+                        }
+                    }
+                });
+
+                $list.on('drop', function (event) {
+                    if (!$page.hasClass('roadmap-edit-mode') || !dragging) return;
+                    event.preventDefault();
+
+                    var $dragging = $(dragging);
+                    if ($indicator.parent().length) {
+                        $indicator.before($dragging);
+                        $indicator.detach();
+                    } else {
+                        $list.append($dragging);
+                    }
+
+                    var ordered = [];
+                    $('.roadmap-contest-row').each(function () {
+                        ordered.push($(this).data('mapping-id'));
+                    });
+                    $('#roadmap-reorder-form input[name=ordered_ids]').val(ordered.join(','));
+                    $('#roadmap-reorder-form').trigger('submit');
+                });
+            });
+        </script>
+    {% endif %}
+{% endblock %}

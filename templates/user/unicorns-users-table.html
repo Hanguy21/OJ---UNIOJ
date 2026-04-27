@@ -1,0 +1,15 @@
+{% extends "user/users-table.html" %}
+
+{% block before_point_head %}
+    <th class="header"></th>
+{% endblock %}
+
+{% block before_point %}
+    <td>
+        <form action="{{ kick_url }}" method="post" class="kick-form">
+            {% csrf_token %}
+            <input type="hidden" name="user" value="{{ user.id }}">
+            <button type="submit" class="button white">{{ _('Kick') }}</button>
+        </form>
+    </td>
+{% endblock %}

@@ -1,0 +1,231 @@
+{% extends "user/base-users.html" %}
+
+{% block title_ruler %}{% endblock %}
+
+{% block title_row %}
+    {% set tab = 'unicorns_edu' %}
+    {% include "user/user-list-tabs.html" %}
+{% endblock %}
+
+{% block users_common_content_class %}users-hub-with-rail{% endblock %}
+
+{% block users_hub_sidebar %}
+    <aside class="users-hub-rail" aria-label="{{ _('Unicorns Edu actions') }}">
+        <h3 class="users-hub-rail__title">{{ _('Actions') }}</h3>
+        <p class="users-hub-rail__org">{{ _('Organization: %(name)s', name=unicorns_org.name) }}</p>
+        <form method="get" class="users-hub-rail__search" action="{{ url('unicorns_edu_list') }}">
+            <label class="users-hub-rail__label" for="unicorns-q">{{ _('Search') }}</label>
+            <input id="unicorns-q" type="search" name="q" value="{{ search_query }}"
+                   placeholder="{{ _('Username or display name') }}" autocomplete="off">
+            <button type="submit" class="button">{{ _('Search') }}</button>
+        </form>
+        <button type="button" class="button users-hub-rail__add" id="unicorns-open-add">{{ _('Add students') }}</button>
+        <button type="button" class="button users-hub-rail__add users-hub-rail__mentor" id="unicorns-open-add-mentor">{{ _('Add mentor') }}</button>
+    </aside>
+{% endblock %}
+
+{% block users_table %}
+    {% include "user/unicorns-users-table.html" %}
+{% endblock %}
+
+{% block bodyend %}
+    {{ super() }}
+    <div id="unicorns-add-backdrop" class="unicorns-modal-backdrop" hidden></div>
+    <div id="unicorns-add-dialog" class="unicorns-modal" role="dialog" aria-modal="true" aria-labelledby="unicorns-add-title" hidden>
+        <div class="unicorns-modal__card">
+            <h2 id="unicorns-add-title">{{ _('Add student') }}</h2>
+            <p class="unicorns-modal__hint">{{ _('Creates an active account with the uni-student role.') }}</p>
+            <form id="unicorns-add-form">
+                {% csrf_token %}
+                <p>
+                    <label for="id_existing_student_username">{{ _('Select existing user') }}</label>
+                    <select name="existing_username" id="id_existing_student_username" style="width:100%"></select>
+                </p>
+                <p class="unicorns-modal__hint">{{ _('If selected, this user will be added as uni-student directly.') }}</p>
+                <p>
+                    <label for="id_display_name">{{ _('Display name') }}</label>
+                    <input type="text" name="display_name" id="id_display_name" maxlength="100">
+                </p>
+                <p>
+                    <label for="id_username">{{ _('Username') }}</label>
+                    <input type="text" name="username" id="id_username" maxlength="30" pattern="^\w+$" title="{{ _('Letters, numbers, underscores') }}">
+                </p>
+                <p>
+                    <label for="id_password">{{ _('Password') }}</label>
+                    <input type="password" name="password" id="id_password" autocomplete="new-password">
+                </p>
+                <p id="unicorns-add-errors" class="unicorns-modal__errors" hidden></p>
+                <div class="unicorns-modal__actions">
+                    <button type="button" class="button white" id="unicorns-add-cancel">{{ _('Cancel') }}</button>
+                    <button type="submit" class="button">{{ _('Create') }}</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    <div id="unicorns-add-mentor-dialog" class="unicorns-modal" role="dialog" aria-modal="true" aria-labelledby="unicorns-add-mentor-title" hidden>
+        <div class="unicorns-modal__card">
+            <h2 id="unicorns-add-mentor-title">{{ _('Add mentor') }}</h2>
+            <p class="unicorns-modal__hint">{{ _('Select an existing user and assign role uni-mentor.') }}</p>
+            <form id="unicorns-add-mentor-form">
+                {% csrf_token %}
+                <p>
+                    <label for="id_mentor_username">{{ _('User') }}</label>
+                    <select name="username" id="id_mentor_username" required style="width:100%"></select>
+                </p>
+                <p id="unicorns-add-mentor-errors" class="unicorns-modal__errors" hidden></p>
+                <div class="unicorns-modal__actions">
+                    <button type="button" class="button white" id="unicorns-add-mentor-cancel">{{ _('Cancel') }}</button>
+                    <button type="submit" class="button">{{ _('Assign') }}</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    <script>
+        (function () {
+            function getCookie(name) {
+                var v = document.cookie.match('(^|;) ?' + name + '=([^;]*)(;|$)');
+                return v ? decodeURIComponent(v[2]) : null;
+            }
+            var backdrop = document.getElementById('unicorns-add-backdrop');
+            var dialog = document.getElementById('unicorns-add-dialog');
+            var form = document.getElementById('unicorns-add-form');
+            var err = document.getElementById('unicorns-add-errors');
+            var openBtn = document.getElementById('unicorns-open-add');
+            var cancelBtn = document.getElementById('unicorns-add-cancel');
+            var existingStudentSelect = $('#id_existing_student_username');
+            var mentorDialog = document.getElementById('unicorns-add-mentor-dialog');
+            var mentorForm = document.getElementById('unicorns-add-mentor-form');
+            var mentorErr = document.getElementById('unicorns-add-mentor-errors');
+            var mentorOpenBtn = document.getElementById('unicorns-open-add-mentor');
+            var mentorCancelBtn = document.getElementById('unicorns-add-mentor-cancel');
+            var mentorSelect = $('#id_mentor_username');
+
+            mentorSelect.select2({
+                theme: '{{ DMOJ_SELECT2_THEME }}',
+                placeholder: '{{ _("Search user...") }}',
+                dropdownParent: $('#unicorns-add-mentor-dialog .unicorns-modal__card'),
+                ajax: {
+                    url: '{{ url("user_search_select2_ajax") }}'
+                },
+                minimumInputLength: 0,
+                templateResult: function (data) {
+                    return $('<span>')
+                        .append($('<img>', {
+                            'class': 'user-search-image', src: data.gravatar_url,
+                            width: 24, height: 24
+                        }))
+                        .append($('<span>', {'class': data.display_rank + ' user-search-name'}).text(data.text));
+                }
+            });
+            existingStudentSelect.select2({
+                theme: '{{ DMOJ_SELECT2_THEME }}',
+                placeholder: '{{ _("Search user...") }}',
+                dropdownParent: $('#unicorns-add-dialog .unicorns-modal__card'),
+                ajax: {
+                    url: '{{ url("user_search_select2_ajax") }}'
+                },
+                minimumInputLength: 0,
+                templateResult: function (data) {
+                    return $('<span>')
+                        .append($('<img>', {
+                            'class': 'user-search-image', src: data.gravatar_url,
+                            width: 24, height: 24
+                        }))
+                        .append($('<span>', {'class': data.display_rank + ' user-search-name'}).text(data.text));
+                }
+            });
+
+            function openModal() {
+                err.hidden = true;
+                err.textContent = '';
+                form.reset();
+                existingStudentSelect.val(null).trigger('change');
+                backdrop.hidden = false;
+                dialog.hidden = false;
+                document.getElementById('id_display_name').focus();
+            }
+            function openMentorModal() {
+                mentorErr.hidden = true;
+                mentorErr.textContent = '';
+                mentorSelect.val(null).trigger('change');
+                backdrop.hidden = false;
+                mentorDialog.hidden = false;
+                mentorSelect.select2('open');
+            }
+            function closeModal() {
+                backdrop.hidden = true;
+                dialog.hidden = true;
+                mentorDialog.hidden = true;
+            }
+            openBtn.addEventListener('click', openModal);
+            mentorOpenBtn.addEventListener('click', openMentorModal);
+            cancelBtn.addEventListener('click', closeModal);
+            mentorCancelBtn.addEventListener('click', closeModal);
+            backdrop.addEventListener('click', closeModal);
+            form.addEventListener('submit', function (e) {
+                e.preventDefault();
+                err.hidden = true;
+                var body = new URLSearchParams(new FormData(form));
+                fetch("{{ url('unicorns_edu_add_student') }}", {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRFToken': getCookie('csrftoken') || body.get('csrfmiddlewaretoken'),
+                        'X-Requested-With': 'XMLHttpRequest',
+                    },
+                    body: body,
+                }).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+                .then(function (res) {
+                    if (res.ok && res.j.ok) {
+                        window.location.reload();
+                        return;
+                    }
+                    var parts = [];
+                    if (res.j.errors) {
+                        for (var k in res.j.errors) {
+                            if (Array.isArray(res.j.errors[k])) parts.push(k + ': ' + res.j.errors[k].join(' '));
+                            else parts.push(k + ': ' + JSON.stringify(res.j.errors[k]));
+                        }
+                    }
+                    if (res.j.error) parts.push(res.j.error);
+                    err.textContent = parts.join('\n') || 'Could not create user.';
+                    err.hidden = false;
+                }).catch(function () {
+                    err.textContent = 'Network error.';
+                    err.hidden = false;
+                });
+            });
+            mentorForm.addEventListener('submit', function (e) {
+                e.preventDefault();
+                mentorErr.hidden = true;
+                var body = new URLSearchParams(new FormData(mentorForm));
+                fetch("{{ url('unicorns_edu_add_mentor') }}", {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRFToken': getCookie('csrftoken') || body.get('csrfmiddlewaretoken'),
+                        'X-Requested-With': 'XMLHttpRequest',
+                    },
+                    body: body,
+                }).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+                .then(function (res) {
+                    if (res.ok && res.j.ok) {
+                        window.location.reload();
+                        return;
+                    }
+                    var parts = [];
+                    if (res.j.errors) {
+                        for (var k in res.j.errors) {
+                            if (Array.isArray(res.j.errors[k])) parts.push(k + ': ' + res.j.errors[k].join(' '));
+                            else parts.push(k + ': ' + JSON.stringify(res.j.errors[k]));
+                        }
+                    }
+                    if (res.j.error) parts.push(res.j.error);
+                    mentorErr.textContent = parts.join('\n') || 'Could not assign mentor.';
+                    mentorErr.hidden = false;
+                }).catch(function () {
+                    mentorErr.textContent = 'Network error.';
+                    mentorErr.hidden = false;
+                });
+            });
+        })();
+    </script>
+{% endblock %}

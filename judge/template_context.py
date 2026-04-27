@@ -92,6 +92,7 @@ def site_theme(request):
         'DARK_STYLE_CSS': settings.DMOJ_THEME_CSS['dark'],
         'LIGHT_STYLE_CSS': settings.DMOJ_THEME_CSS['light'],
         'PREFERRED_STYLE_CSS': preferred_css,
+        'STATIC_CACHE_BUSTER': getattr(settings, 'STATIC_CACHE_BUSTER', ''),
     }
 
 

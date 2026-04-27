@@ -4,30 +4,33 @@
     {% block users_js_media %}{% endblock %}
     <script>
         $(function () {
-            $('#search-handle').replaceWith($('<select>').attr({
-                id: 'search-handle',
-                name: 'handle',
-                onchange: 'form.submit()'
-            }));
-            var in_user_redirect = false;
-            $('#search-handle').select2({
-                theme: '{{ DMOJ_SELECT2_THEME }}',
-                placeholder: '{{ _('Search by handle...') }}',
-                ajax: {
-                    url: '{{ url('user_search_select2_ajax') }}'
-                },
-                minimumInputLength: 1,
-                templateResult: function (data, container) {
-                    return $('<span>')
-                        .append($('<img>', {
-                            'class': 'user-search-image', src: data.gravatar_url,
-                            width: 24, height: 24
-                        }))
-                        .append($('<span>', {'class': data.display_rank + ' user-search-name'}).text(data.text));
-                }
-            }).on('select2:selecting', function () {
-                return !in_user_redirect;
-            });
+            var $handle = $('#search-handle');
+            if ($handle.length) {
+                $handle.replaceWith($('<select>').attr({
+                    id: 'search-handle',
+                    name: 'handle',
+                    onchange: 'form.submit()'
+                }));
+                var in_user_redirect = false;
+                $('#search-handle').select2({
+                    theme: '{{ DMOJ_SELECT2_THEME }}',
+                    placeholder: '{{ _('Search by handle...') }}',
+                    ajax: {
+                        url: '{{ url('user_search_select2_ajax') }}'
+                    },
+                    minimumInputLength: 1,
+                    templateResult: function (data, container) {
+                        return $('<span>')
+                            .append($('<img>', {
+                                'class': 'user-search-image', src: data.gravatar_url,
+                                width: 24, height: 24
+                            }))
+                            .append($('<span>', {'class': data.display_rank + ' user-search-name'}).text(data.text));
+                    }
+                }).on('select2:selecting', function () {
+                    return !in_user_redirect;
+                });
+            }
 
             var $last = null;
             $(window).on('hashchange', function () {
@@ -53,7 +56,7 @@
     {% if page_obj and page_obj.has_other_pages() %}
         <div class="top-pagination-bar">
             {% include "list-pages.html" %}
-            {% if not organization %}
+            {% if not organization and not (unicorns_edu_hub|default(false)) %}
                 <form id="search-form" name="form" action="{{ url('user_ranking_redirect') }}" method="get">
                     <input id="search-handle" type="text" name="search"
                            placeholder="{{ _('Search by handle...') }}">
@@ -62,8 +65,9 @@
         </div>
     {% endif %}
 
-    <div id="common-content">
-        <div id="content-left" class="users users-hub-page">
+    <div id="common-content" class="{% block users_common_content_class %}{% endblock %}">
+        {% block users_hub_sidebar %}{% endblock %}
+        <div id="content-left" class="users users-hub-page{% block users_hub_page_extra_class %}{% endblock %}">
             {% block before_users_table %}{% endblock %}
 
             <div class="h-scrollable-table">

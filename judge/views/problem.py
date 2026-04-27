@@ -35,8 +35,7 @@ from django.views.generic.detail import SingleObjectMixin
 from reversion import revisions
 
 from judge.comments import CommentedDetailView
-from judge.forms import LanguageLimitFormSet, PolygonImportForm, ProblemCloneForm, ProblemEditForm, ProblemSubmitForm, \
-    ProposeProblemSolutionFormSet
+from judge.forms import LanguageLimitFormSet, PolygonImportForm, ProblemCloneForm, ProblemCreateForm, ProblemEditForm, ProblemSubmitForm
 from judge.models import ContestSubmission, Judge, Language, Problem, ProblemGroup, \
     ProblemTranslation, ProblemType, RuntimeVersion, Solution, Submission, SubmissionSource
 from judge.tasks import on_new_problem
@@ -132,6 +131,7 @@ class ProblemSolution(SolvedProblemMixin, ProblemMixin, TitleMixin, CommentedDet
         if not solution.is_accessible_by(self.request.user) or self.request.in_contest:
             raise Http404()
         context['solution'] = solution
+        context['solution_content'] = solution.get_content_text()
         context['has_solved_problem'] = self.object.id in self.get_completed_problems()
         return context
 
@@ -756,6 +756,94 @@ class ProblemSubmit(LoginRequiredMixin, ProblemMixin, TitleMixin, SingleObjectFo
         return super().dispatch(request, *args, **kwargs)
 
 
+class ProblemQuickSubmit(LoginRequiredMixin, ProblemMixin, SingleObjectMixin, View):
+    @staticmethod
+    def _extract_solution_code(content):
+        text = (content or '').strip()
+        if not text:
+            return '', ''
+        match = re.fullmatch(r'```([^\n`]*)\n([\s\S]*?)\n```', text)
+        if match:
+            return match.group(2).strip(), match.group(1).strip().lower()
+        return text, ''
+
+    def _pick_language(self, lang_hint):
+        allowed = self.object.allowed_languages.all()
+        if not allowed.exists():
+            return None
+
+        hint = (lang_hint or '').lower()
+        key_match = allowed.filter(key__iexact=hint).order_by('name').first()
+        if key_match is not None:
+            return key_match
+
+        if hint in ('cpp', 'c++', 'cc', 'cxx'):
+            preferred = allowed.filter(common_name__icontains='C++').order_by('name').first()
+            if preferred is not None:
+                return preferred
+
+        return allowed.order_by('name').first()
+
+    def post(self, request, *args, **kwargs):
+        self.object = self.get_object()
+        profile = request.profile
+
+        if not (self.object.is_editor(profile) or request.user.has_perm('judge.quick_submit_problem')):
+            raise PermissionDenied()
+
+        if self.object.banned_users.filter(id=profile.id).exists() and not request.user.is_superuser:
+            return generic_message(
+                request,
+                _('Banned from submitting'),
+                _('You have been declared persona non grata for this problem. '
+                  'You are permanently barred from submitting to this problem.'),
+            )
+
+        # Reuse existing anti-spam policy from normal submissions.
+        if (
+            not request.user.has_perm('judge.spam_submission') and
+            Submission.objects.filter(user=profile, rejudged_date__isnull=True)
+                              .exclude(status__in=['D', 'IE', 'CE', 'AB']).count() >= settings.DMOJ_SUBMISSION_LIMIT
+        ):
+            return HttpResponse(format_html('<h1>{0}</h1>', _('You submitted too many submissions.')), status=429)
+
+        try:
+            solution = self.object.solution
+        except Solution.DoesNotExist:
+            solution = None
+
+        if solution is None:
+            messages.error(request, _('No official solution is available for quick submit yet.'))
+            return HttpResponseRedirect(reverse('problem_detail', args=[self.object.code]))
+
+        source_code, lang_hint = self._extract_solution_code(solution.get_content_text())
+        if not lang_hint:
+            lang_hint = solution.solution_language_key
+        if not source_code:
+            messages.error(request, _('Official solution is empty, cannot quick submit.'))
+            return HttpResponseRedirect(reverse('problem_detail', args=[self.object.code]))
+
+        language = self._pick_language(lang_hint)
+        if language is None:
+            messages.error(request, _('No allowed language is configured for this problem.'))
+            return HttpResponseRedirect(reverse('problem_detail', args=[self.object.code]))
+
+        with transaction.atomic():
+            new_submission = Submission.objects.create(
+                user=profile,
+                problem=self.object,
+                language=language,
+            )
+            SubmissionSource.objects.create(
+                submission=new_submission,
+                source=source_code,
+            )
+
+        new_submission.judge(force_judge=True, judge_id=None)
+        messages.success(request, _('Quick submit created.'))
+        return HttpResponseRedirect(reverse('submission_status', args=(new_submission.id,)))
+
+
 class ProblemClone(ProblemMixin, PermissionRequiredMixin, TitleMixin, SingleObjectFormView):
     title = gettext_lazy('Clone Problem')
     template_name = 'problem/clone.html'
@@ -799,7 +887,7 @@ class ProblemClone(ProblemMixin, PermissionRequiredMixin, TitleMixin, SingleObje
 class ProblemCreate(PermissionRequiredMixin, TitleMixin, CreateView):
     template_name = 'problem/suggest.html'
     model = Problem
-    form_class = ProblemEditForm
+    form_class = ProblemCreateForm
     permission_required = 'judge.add_problem'
 
     def get_form_kwargs(self):
@@ -826,11 +914,23 @@ class ProblemCreate(PermissionRequiredMixin, TitleMixin, CreateView):
             problem.date = timezone.now()
             self.save_statement(form, problem)
             problem.save()
+            self.save_solution(form, problem)
 
             revisions.set_comment(_('Created on site'))
             revisions.set_user(self.request.user)
 
         return HttpResponseRedirect(self.get_success_url())
+
+    def save_solution(self, form, problem):
+        solution = Solution.objects.create(
+            problem=problem,
+            is_public=False,
+            publish_on=timezone.now(),
+            solution_language_key=form.cleaned_data['solution_language'].key,
+            content='',
+        )
+        solution.save_content_text(form.cleaned_data['solution_content'])
+        solution.authors.add(self.request.user.profile)
 
     def get_initial(self):
         initial = super(ProblemCreate, self).get_initial()
@@ -1189,11 +1289,6 @@ class ProblemEdit(ProblemMixin, TitleMixin, UpdateView):
             raise PermissionDenied()
         return problem
 
-    def get_solution_formset(self):
-        if self.request.POST:
-            return ProposeProblemSolutionFormSet(self.request.POST, instance=self.get_object())
-        return ProposeProblemSolutionFormSet(instance=self.get_object())
-
     def get_language_limit_formset(self):
         if self.request.POST:
             return LanguageLimitFormSet(self.request.POST, instance=self.get_object(),
@@ -1203,7 +1298,6 @@ class ProblemEdit(ProblemMixin, TitleMixin, UpdateView):
     def get_context_data(self, **kwargs):
         data = super().get_context_data(**kwargs)
         data['lang_limit_formset'] = self.get_language_limit_formset()
-        data['solution_formset'] = self.get_solution_formset()
         return data
 
     def get_form_kwargs(self):
@@ -1226,14 +1320,13 @@ class ProblemEdit(ProblemMixin, TitleMixin, UpdateView):
         self.object = self.get_object()
         form = self.get_form()
         form_lang_limit = self.get_language_limit_formset()
-        form_edit = self.get_solution_formset()
-        if form.is_valid() and form_edit.is_valid() and form_lang_limit.is_valid():
+        if form.is_valid() and form_lang_limit.is_valid():
             with revisions.create_revision(atomic=True):
                 problem = form.save()
                 self.save_statement(form, problem)
                 problem.save()
                 form_lang_limit.save()
-                form_edit.save()
+                self.save_solution(form, problem)
 
                 revisions.set_comment(_('Edited from site'))
                 revisions.set_user(self.request.user)
@@ -1241,6 +1334,29 @@ class ProblemEdit(ProblemMixin, TitleMixin, UpdateView):
             return HttpResponseRedirect(reverse('problem_detail', args=[self.object.code]))
 
         return self.render_to_response(self.get_context_data(object=self.object))
+
+    def save_solution(self, form, problem):
+        solution_content = (form.cleaned_data.get('solution_content') or '').strip()
+        if solution_content:
+            solution, created = Solution.objects.update_or_create(
+                problem=problem,
+                defaults={
+                    'is_public': False,
+                    'publish_on': timezone.now(),
+                    'solution_language_key': form.cleaned_data['solution_language'].key,
+                    'content': '',
+                },
+            )
+            solution.save_content_text(solution_content)
+            if created:
+                solution.authors.add(self.request.user.profile)
+        else:
+            try:
+                solution = problem.solution
+                solution.delete_content_file()
+                solution.delete()
+            except Solution.DoesNotExist:
+                pass
 
     def dispatch(self, request, *args, **kwargs):
         try:

@@ -10,11 +10,12 @@ from django.conf import settings
 from django.contrib.auth import logout as auth_logout
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.contrib.auth.models import Permission, User
+from django.contrib.auth.models import Group, Permission, User
 from django.contrib.auth.views import LoginView, PasswordChangeView, PasswordResetView, redirect_to_login
 from django.contrib.contenttypes.models import ContentType
 from django.core.cache import cache
 from django.core.exceptions import ImproperlyConfigured, PermissionDenied, ValidationError
+from django.db import transaction
 from django.db.models import Count, F, FilteredRelation, Max, Min, Prefetch, Q
 from django.db.models.expressions import Value
 from django.db.models.fields import DateField
@@ -32,9 +33,9 @@ from django.views.decorators.http import require_POST
 from django.views.generic import DetailView, FormView, ListView, TemplateView, View
 from reversion import revisions
 
-from judge.forms import CustomAuthenticationForm, ProfileForm, UserBanForm, UserDownloadDataForm, UserForm, \
-    newsletter_id
-from judge.models import BlogPost, Organization, Profile, Submission
+from judge.forms import CustomAuthenticationForm, ProfileForm, UniStudentCreateForm, UniStudentOnboardingProfileForm, \
+    UniStudentOnboardingUserForm, UserBanForm, UserDownloadDataForm, UserForm, newsletter_id
+from judge.models import BlogPost, Language, Organization, Profile, Submission
 from judge.models import Comment
 from judge.performance_points import get_pp_breakdown
 from judge.ratings import rating_class, rating_progress
@@ -59,6 +60,17 @@ def remap_keys(iterable, mapping):
     return [dict((mapping.get(k, k), v) for k, v in item.items()) for item in iterable]
 
 
+def get_unicorns_role_badge(profile):
+    student_group = getattr(settings, 'GROUP_UNI_STUDENT', 'uni-student')
+    mentor_group = getattr(settings, 'GROUP_UNI_MENTOR', 'uni-mentor')
+    names = set(profile.user.groups.filter(name__in=(student_group, mentor_group)).values_list('name', flat=True))
+    if mentor_group in names:
+        return 'uni-mentor'
+    if student_group in names:
+        return 'uni-student'
+    return None
+
+
 class UserMixin(object):
     model = Profile
     slug_field = 'user__username'
@@ -76,6 +88,7 @@ class CustomUserMixin(object):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context['user'] = self.user
+        context['user_role_badge'] = get_unicorns_role_badge(self.user)
         return context
 
     def dispatch(self, request, *args, **kwargs):
@@ -127,6 +140,7 @@ class UserPage(TitleMixin, UserMixin, DetailView):
 
     def get_context_data(self, **kwargs):
         context = super(UserPage, self).get_context_data(**kwargs)
+        context['user_role_badge'] = get_unicorns_role_badge(self.object)
 
         context['hide_solved'] = int(self.hide_solved)
         context['authored'] = self.object.authored_problems.filter(is_public=True, is_organization_private=False) \
@@ -461,9 +475,13 @@ class UserDownloadData(LoginRequiredMixin, UserDataMixin, View):
 def edit_profile(request):
     if request.profile.mute:
         return generic_message(request, _("Can't edit profile"), _('Your part is silent, little toad.'), status=403)
+    is_uni_student = request.user.groups.filter(name=getattr(settings, 'GROUP_UNI_STUDENT', 'uni-student')).exists()
+    lock_full_name = is_uni_student and not request.user.is_staff
     if request.method == 'POST':
         form = ProfileForm(request.POST, instance=request.profile, user=request.user)
         form_user = UserForm(request.POST, instance=request.user)
+        if lock_full_name:
+            form_user.fields.pop('first_name', None)
         if form.is_valid() and form_user.is_valid():
             with revisions.create_revision(atomic=True):
                 form_user.save()
@@ -491,6 +509,8 @@ def edit_profile(request):
     else:
         form = ProfileForm(instance=request.profile, user=request.user)
         form_user = UserForm(instance=request.user)
+        if lock_full_name:
+            form_user.fields.pop('first_name', None)
         if newsletter_id is not None:
             try:
                 subscription = Subscription.objects.get(user=request.user, newsletter_id=newsletter_id)
@@ -507,6 +527,7 @@ def edit_profile(request):
         'has_math_config': bool(settings.MATHOID_URL),
         'ignore_user_script': True,
         'TIMEZONE_MAP': settings.TIMEZONE_MAP,
+        'user_role_badge': get_unicorns_role_badge(request.profile),
     })
 
 
@@ -610,6 +631,223 @@ class ContribList(QueryStringSortMixin, DiggPaginatorMixin, TitleMixin, ListView
 
 
 contrib_list_view = ContribList.as_view()
+
+
+def get_unicorns_organization():
+    org = Organization.objects.get_or_create(
+        slug=getattr(settings, 'DEFAULT_UNICORNS_ORG_SLUG', 'unicorns-edu'),
+        defaults={
+            'name': getattr(settings, 'DEFAULT_UNICORNS_ORG_NAME', 'Unicorns Edu'),
+            'short_name': 'UNICORNS',
+            'about': _('Default organization for Unicorns Edu students and mentors.'),
+            'is_open': False,
+            'is_unlisted': True,
+        },
+    )[0]
+    admin_user = User.objects.filter(username='admin').first()
+    if admin_user:
+        admin_profile = getattr(admin_user, 'profile', None)
+        if admin_profile is not None:
+            org.admins.add(admin_profile)
+            org.members.add(admin_profile)
+            org_admin_group, _created = Group.objects.get_or_create(
+                name=getattr(settings, 'GROUP_PERMISSION_FOR_ORG_ADMIN', 'Org Admin'),
+            )
+            admin_user.groups.add(org_admin_group)
+    return org
+
+
+class UniStudentEduList(UserList):
+    title = gettext_lazy('Unicorns Edu')
+    template_name = 'user/unicorns-edu.html'
+
+    def dispatch(self, request, *args, **kwargs):
+        if not request.user.is_authenticated or not request.user.is_staff:
+            raise PermissionDenied()
+        self.unicorns_org = get_unicorns_organization()
+        return super(UniStudentEduList, self).dispatch(request, *args, **kwargs)
+
+    def get_context_data(self, **kwargs):
+        context = super(UniStudentEduList, self).get_context_data(**kwargs)
+        context['unicorns_edu_hub'] = True
+        context['search_query'] = (self.request.GET.get('q') or '').strip()
+        context['unicorns_org'] = self.unicorns_org
+        context['kick_url'] = reverse('unicorns_edu_kick_user')
+        return context
+
+    def get_queryset(self):
+        student_group = getattr(settings, 'GROUP_UNI_STUDENT', 'uni-student')
+        mentor_group = getattr(settings, 'GROUP_UNI_MENTOR', 'uni-mentor')
+
+        # Keep Unicorns org membership aligned with Unicorns roles so existing role users show up.
+        role_members = Profile.objects.filter(
+            Q(user__groups__name=student_group) | Q(user__groups__name=mentor_group),
+        ).distinct()
+        missing_org_members = role_members.exclude(organizations=self.unicorns_org)
+        if missing_org_members.exists():
+            self.unicorns_org.members.add(*missing_org_members)
+
+        qs = (self.unicorns_org.members.filter(
+                is_unlisted=False,
+                user__groups__name__in=(student_group, mentor_group),
+              )
+              .order_by(self.order, 'id')
+              .distinct()
+              .prefetch_related(Prefetch('user', queryset=User.objects.only('username', 'first_name')))
+              .prefetch_related(Prefetch('organizations',
+                                queryset=Organization.objects.filter(is_unlisted=False).only('name', 'id', 'slug')))
+              .select_related('display_badge')
+              .only('display_rank', 'display_badge', 'user', 'points', 'rating', 'performance_points',
+                    'problem_count', 'organizations', 'username_display_override'))
+        q = (self.request.GET.get('q') or '').strip()
+        if q:
+            qs = qs.filter(Q(user__username__icontains=q) | Q(username_display_override__icontains=q))
+        return qs
+
+
+unicorns_edu_list_view = UniStudentEduList.as_view()
+
+
+@require_POST
+@login_required
+def unicorns_edu_add_student(request):
+    if not request.user.is_staff:
+        return JsonResponse({'error': str(_('Forbidden'))}, status=403)
+    form = UniStudentCreateForm(request.POST)
+    group_name = getattr(settings, 'GROUP_UNI_STUDENT', 'uni-student')
+    org = get_unicorns_organization()
+    existing_username = (request.POST.get('existing_username') or '').strip()
+    if existing_username:
+        try:
+            existing_user = User.objects.get(username=existing_username)
+        except User.DoesNotExist:
+            return JsonResponse({'errors': {'existing_username': [_('User does not exist.')]}}, status=400)
+        with transaction.atomic():
+            group, _ = Group.objects.get_or_create(name=group_name)
+            existing_user.groups.add(group)
+            existing_user.profile.organizations.add(org)
+        return JsonResponse({'ok': True, 'username': existing_user.username})
+
+    if not form.is_valid():
+        return JsonResponse({'errors': form.errors}, status=400)
+    display_name = form.cleaned_data['display_name'].strip()
+    username = form.cleaned_data['username']
+    password = form.cleaned_data['password']
+    with transaction.atomic():
+        user = User(username=username, first_name=display_name[:150], is_active=True)
+        user.set_password(password)
+        user.save()
+        lang = Language.get_default_language()
+        profile = Profile(
+            user=user,
+            language=lang,
+            username_display_override=display_name[:100],
+            uni_student_profile_completed=False,
+        )
+        profile.save()
+        group, _ = Group.objects.get_or_create(name=group_name)
+        user.groups.add(group)
+        profile.organizations.add(org)
+    return JsonResponse({'ok': True, 'username': username})
+
+
+@require_POST
+@login_required
+def unicorns_edu_add_mentor(request):
+    if not request.user.is_staff:
+        return JsonResponse({'error': str(_('Forbidden'))}, status=403)
+    username = (request.POST.get('username') or '').strip()
+    if not username:
+        return JsonResponse({'errors': {'username': [_('Please select a user.')]}}, status=400)
+
+    try:
+        mentor_user = User.objects.get(username=username)
+    except User.DoesNotExist:
+        return JsonResponse({'errors': {'username': [_('User does not exist.')]}}, status=400)
+
+    org = get_unicorns_organization()
+    mentor_group_name = getattr(settings, 'GROUP_UNI_MENTOR', 'uni-mentor')
+    with transaction.atomic():
+        mentor_group, _ = Group.objects.get_or_create(name=mentor_group_name)
+        mentor_user.groups.add(mentor_group)
+        mentor_user.profile.organizations.add(org)
+
+    return JsonResponse({'ok': True, 'username': mentor_user.username})
+
+
+@require_POST
+@login_required
+def unicorns_edu_kick_user(request):
+    if not request.user.is_staff:
+        return JsonResponse({'error': str(_('Forbidden'))}, status=403)
+    profile_id = request.POST.get('user', '').strip()
+    if not profile_id.isdigit():
+        return JsonResponse({'error': str(_('Invalid user.'))}, status=400)
+
+    try:
+        profile = Profile.objects.select_related('user').get(pk=int(profile_id))
+    except Profile.DoesNotExist:
+        return JsonResponse({'error': str(_('User does not exist.'))}, status=404)
+
+    student_group = getattr(settings, 'GROUP_UNI_STUDENT', 'uni-student')
+    mentor_group = getattr(settings, 'GROUP_UNI_MENTOR', 'uni-mentor')
+    org = get_unicorns_organization()
+    with transaction.atomic():
+        profile.user.groups.remove(*Group.objects.filter(name__in=(student_group, mentor_group)))
+        profile.organizations.remove(org)
+
+    return HttpResponseRedirect(reverse('unicorns_edu_list'))
+
+
+class UniStudentOnboardingView(LoginRequiredMixin, TitleMixin, View):
+    template_name = 'user/uni-student-onboarding.html'
+    title = gettext_lazy('Complete your profile')
+
+    def _redirect_done(self, request):
+        nxt = request.GET.get('next') or request.POST.get('next') or ''
+        if nxt.startswith('/') and not nxt.startswith('//'):
+            return HttpResponseRedirect(nxt)
+        return HttpResponseRedirect(reverse('home'))
+
+    def dispatch(self, request, *args, **kwargs):
+        if not request.user.is_authenticated:
+            return super().dispatch(request, *args, **kwargs)
+        if not request.user.groups.filter(name=getattr(settings, 'GROUP_UNI_STUDENT', 'uni-student')).exists():
+            return HttpResponseRedirect(reverse('home'))
+        if request.user.is_staff:
+            return HttpResponseRedirect(reverse('home'))
+        if request.profile.uni_student_profile_completed:
+            return self._redirect_done(request)
+        return super().dispatch(request, *args, **kwargs)
+
+    def get(self, request, *args, **kwargs):
+        return render(request, self.template_name, self._forms_context(request))
+
+    def post(self, request, *args, **kwargs):
+        form_profile = UniStudentOnboardingProfileForm(request.POST, instance=request.profile)
+        form_user = UniStudentOnboardingUserForm(request.POST, instance=request.user)
+        if form_profile.is_valid() and form_user.is_valid():
+            with revisions.create_revision(atomic=True):
+                form_user.save()
+                form_profile.save()
+                request.profile.uni_student_profile_completed = True
+                request.profile.save(update_fields=['uni_student_profile_completed'])
+                revisions.set_user(request.user)
+                revisions.set_comment(_('Unicorns student onboarding completed'))
+            return self._redirect_done(request)
+        ctx = self._forms_context(request)
+        ctx['form_profile'] = form_profile
+        ctx['form_user'] = form_user
+        return render(request, self.template_name, ctx, status=400)
+
+    def _forms_context(self, request):
+        return {
+            'title': self.get_title(),
+            'form_profile': UniStudentOnboardingProfileForm(instance=request.profile),
+            'form_user': UniStudentOnboardingUserForm(instance=request.user),
+            'TIMEZONE_MAP': settings.TIMEZONE_MAP,
+            'next': request.GET.get('next') or '',
+        }
 
 
 class FixedContestRanking(ContestRanking):

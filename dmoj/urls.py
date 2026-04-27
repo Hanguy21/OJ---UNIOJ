@@ -16,7 +16,7 @@ from martor.views import markdown_search_user
 from judge.feed import AtomBlogFeed, AtomCommentFeed, AtomProblemFeed, BlogFeed, CommentFeed, ProblemFeed
 from judge.sitemap import sitemaps
 from judge.views import TitledTemplateView, api, blog, comment, contests, language, license, mailgun, organization, \
-    preview, problem, problem_manage, ranked_submission, register, stats, status, submission, tag, tasks, ticket, \
+    preview, problem, problem_manage, ranked_submission, register, roadmap, stats, status, submission, tag, tasks, ticket, \
     two_factor, user, widgets
 from judge.views.problem_data import ProblemDataView, ProblemSubmissionDiff, \
     problem_data_file, problem_init_view
@@ -71,6 +71,7 @@ register_patterns = [
         title=_('Password reset sent'),
     ), name='password_reset_done'),
     path('social/error/', register.social_auth_error, name='social_auth_error'),
+    path('uni-student/onboarding/', user.UniStudentOnboardingView.as_view(), name='uni_student_onboarding'),
 
     path('2fa/', two_factor.TwoFactorLoginView.as_view(), name='login_2fa'),
     path('2fa/enable/', two_factor.TOTPEnableView.as_view(), name='enable_2fa'),
@@ -130,6 +131,7 @@ urlpatterns = [
         path('/clone', problem.ProblemClone.as_view(), name='problem_clone'),
         path('/submit', problem.ProblemSubmit.as_view(), name='problem_submit'),
         path('/resubmit/<int:submission>', problem.ProblemSubmit.as_view(), name='problem_submit'),
+        path('/quick-submit', problem.ProblemQuickSubmit.as_view(), name='problem_quick_submit'),
 
         path('/rank/', paged_list_view(ranked_submission.RankedSubmissions, 'ranked_submissions')),
         path('/submissions/', paged_list_view(submission.ProblemSubmissions, 'chronological_submissions')),
@@ -176,6 +178,9 @@ urlpatterns = [
     path('submissions/diff', submission.SubmissionSourceDiff, name='diff_submissions'),
     path('submissions/user/<str:user>/', paged_list_view(submission.AllUserSubmissions, 'all_user_submissions')),
 
+    path('roadmap/', roadmap.RoadmapOverview.as_view(), name='roadmap_overview'),
+    path('roadmap/<slug:slug>/', roadmap.RoadmapLevelDetail.as_view(), name='roadmap_level_detail'),
+
     path('src/<int:submission>', submission.SubmissionSource.as_view(), name='submission_source'),
     path('src/<int:submission>/raw', submission.SubmissionSourceRaw.as_view(), name='submission_source_raw'),
     path('src/<int:submission>/download', submission.SubmissionSourceDownload.as_view(),
@@ -187,6 +192,14 @@ urlpatterns = [
     ])),
 
     path('users/', include([
+        path('unicorns-edu/', include([
+            path('', user.unicorns_edu_list_view, name='unicorns_edu_list'),
+            path('<int:page>', lambda request, page:
+                 HttpResponsePermanentRedirect('%s?page=%s' % (reverse('unicorns_edu_list'), page))),
+            path('add/', user.unicorns_edu_add_student, name='unicorns_edu_add_student'),
+            path('add-mentor/', user.unicorns_edu_add_mentor, name='unicorns_edu_add_mentor'),
+            path('kick/', user.unicorns_edu_kick_user, name='unicorns_edu_kick_user'),
+        ])),
         path('', user.users, name='user_list'),
         path('<int:page>', lambda request, page:
              HttpResponsePermanentRedirect('%s?page=%s' % (reverse('user_list'), page))),

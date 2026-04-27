@@ -44,18 +44,18 @@
     {% if not INLINE_FONTAWESOME %}
         <link rel="stylesheet" href="{{ FONTAWESOME_CSS }}">
     {% endif %}
-    {% compress css %}
-        {# TODO: once dark mode support is better, enable for all users by deleting the else branch #}
-        {% if perms.judge.test_site %}
-            {% if PREFERRED_STYLE_CSS is not none %}
-                <link rel="stylesheet" href="{{ static(PREFERRED_STYLE_CSS) }}">
-            {% else %}
-                <link rel="stylesheet" href="{{ static(LIGHT_STYLE_CSS) }}" media="(prefers-color-scheme: light)">
-                <link rel="stylesheet" href="{{ static(DARK_STYLE_CSS) }}" media="(prefers-color-scheme: dark)">
-            {% endif %}
+    {# Keep theme stylesheet outside compressor so cache-buster is always rendered dynamically. #}
+    {% if perms.judge.test_site %}
+        {% if PREFERRED_STYLE_CSS is not none %}
+            <link rel="stylesheet" href="{{ static(PREFERRED_STYLE_CSS) }}?v={{ STATIC_CACHE_BUSTER }}">
         {% else %}
-            <link rel="stylesheet" href="{{ static(LIGHT_STYLE_CSS) }}">
+            <link rel="stylesheet" href="{{ static(LIGHT_STYLE_CSS) }}?v={{ STATIC_CACHE_BUSTER }}" media="(prefers-color-scheme: light)">
+            <link rel="stylesheet" href="{{ static(DARK_STYLE_CSS) }}?v={{ STATIC_CACHE_BUSTER }}" media="(prefers-color-scheme: dark)">
         {% endif %}
+    {% else %}
+        <link rel="stylesheet" href="{{ static(LIGHT_STYLE_CSS) }}?v={{ STATIC_CACHE_BUSTER }}">
+    {% endif %}
+    {% compress css %}
         {% if INLINE_FONTAWESOME %}<link rel="stylesheet" href="{{ static('libs/fontawesome/font-awesome.css') }}">{% endif %}
         <link rel="stylesheet" href="{{ static('source_sans_pro.css') }}">
         <link rel="stylesheet" type="text/css" href="{{ static('libs/clipboard/tooltip.css') }}">
@@ -257,9 +257,17 @@
             <li class="home-nav-element nav-site-logo"><a href="{{ url('home') }}">{% include "site-logo-fragment.html" %}</a></li>
             <li class="home-nav-element"><span class="nav-divider"></span></li>
             <li class="home-menu-item"><a href="{{ url('home') }}" class="nav-home"><i class="fa fa-home nav-item-icon" aria-hidden="true"></i><span class="nav-item-label">{{ _('Home') }}</span></a></li>
+            {% if perms.judge.view_roadmap %}
+                <li>
+                    <a href="{{ url('roadmap_overview') }}" class="nav-roadmap{% if request.path.startswith('/roadmap') %} active{% endif %}">
+                        <i class="fa fa-road nav-item-icon" aria-hidden="true"></i>
+                        <span class="nav-item-label">{{ _('Roadmap') }}</span>
+                    </a>
+                </li>
+            {% endif %}
             {% for node in mptt_tree(nav_bar) recursive %}
                 <li>
-                    <a href="{{ node.path }}" class="nav-{{ node.key }}{% if node.key in nav_tab %} active{% endif %}">{% set nk = node.key %}<i class="fa nav-item-icon {% if nk in ('problems', 'problem') %}fa-book{% elif nk in ('submissions', 'submission') %}fa-code{% elif nk in ('users', 'user') %}fa-users{% elif nk in ('contests', 'contest') %}fa-trophy{% elif nk == 'about' %}fa-info-circle{% elif nk == 'tickets' %}fa-ticket{% elif nk == 'home' %}fa-home{% else %}fa-angle-double-right{% endif %}" aria-hidden="true"></i><span class="nav-item-label">{{ _(node.label) }}</span>
+                    <a href="{{ node.path }}" class="nav-{{ node.key }}{% if node.key in nav_tab %} active{% endif %}">{% set nk = node.key %}<i class="fa nav-item-icon {% if nk in ('problems', 'problem') %}fa-book{% elif nk in ('submissions', 'submission') %}fa-code{% elif nk in ('users', 'user') %}fa-users{% elif nk in ('contests', 'contest') %}fa-trophy{% elif nk in ('roadmap',) %}fa-road{% elif nk == 'about' %}fa-info-circle{% elif nk == 'tickets' %}fa-ticket{% elif nk == 'home' %}fa-home{% else %}fa-angle-double-right{% endif %}" aria-hidden="true"></i><span class="nav-item-label">{{ _(node.label) }}</span>
                         {% if not node.is_leaf_node() %}
                             <div class="nav-expand">&gt;</div>
                         {% endif %}

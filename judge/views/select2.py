@@ -11,10 +11,15 @@ from judge.models import Comment, Contest, Organization, Problem, Profile, Tag, 
 
 def _get_user_queryset(term):
     qs = Profile.objects
+    stripped = term.strip()
     if term.endswith(' '):
-        qs = qs.filter(user__username=term.strip())
+        qs = qs.filter(user__username=stripped)
     else:
-        qs = qs.filter(user__username__icontains=term)
+        qs = qs.filter(
+            Q(user__username__icontains=term) |
+            Q(user__first_name__icontains=term) |
+            Q(username_display_override__icontains=term),
+        )
     return qs
 
 

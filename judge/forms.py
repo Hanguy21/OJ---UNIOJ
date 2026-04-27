@@ -1,5 +1,6 @@
 import json
 import os
+import re
 import zipfile
 from operator import attrgetter, itemgetter
 
@@ -46,6 +47,50 @@ two_factor_validators_by_length = {
         'err': _('Invalid scratch code.'),
     },
 }
+
+
+class UniStudentCreateForm(Form):
+    display_name = CharField(label=_('Display name'), max_length=100)
+    username = forms.RegexField(
+        regex=re.compile(r'^\w+$', re.ASCII),
+        max_length=30,
+        label=_('Username'),
+        error_messages={'invalid': _('A username must contain letters, numbers, or underscores.')},
+    )
+    password = CharField(label=_('Password'), widget=forms.PasswordInput)
+
+    def clean_username(self):
+        name = self.cleaned_data['username']
+        if User.objects.filter(username__iexact=name).exists():
+            raise ValidationError(_('Username taken.'))
+        return name
+
+
+class UniStudentOnboardingProfileForm(ModelForm):
+    class Meta:
+        model = Profile
+        fields = ['timezone', 'language', 'about']
+        widgets = {
+            'timezone': Select2Widget(attrs={'style': 'width:100%'}),
+            'language': Select2Widget(attrs={'style': 'width:100%'}),
+            'about': forms.Textarea(attrs={'rows': 6, 'style': 'width:100%;max-width:640px'}),
+        }
+
+
+class UniStudentOnboardingUserForm(ModelForm):
+    class Meta:
+        model = User
+        fields = ['email']
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['email'].required = False
+
+    def clean_email(self):
+        email = (self.cleaned_data.get('email') or '').strip()
+        if email and User.objects.exclude(pk=self.instance.pk).filter(email__iexact=email).exists():
+            raise ValidationError(_('This email address is already in use.'))
+        return email or ''
 
 
 class ProfileForm(ModelForm):
@@ -126,6 +171,12 @@ class UserForm(ModelForm):
 
 
 class ProposeProblemSolutionForm(ModelForm):
+    solution_file = forms.FileField(
+        required=False,
+        label=_('Solution file'),
+        help_text=_('Optional. Upload a UTF-8 text file to auto-fill solution content.'),
+    )
+
     class Meta:
         model = Solution
         fields = ('is_public', 'publish_on', 'authors', 'content')
@@ -134,6 +185,21 @@ class ProposeProblemSolutionForm(ModelForm):
             'content': MartorWidget(attrs={'data-markdownfy-url': reverse_lazy('solution_preview')}),
             'publish_on': DateInput(attrs={'type': 'date'}),
         }
+
+    def clean(self):
+        cleaned_data = super(ProposeProblemSolutionForm, self).clean()
+        content = (cleaned_data.get('content') or '').strip()
+        solution_file = self.files.get(self.add_prefix('solution_file'))
+
+        if solution_file and not content:
+            try:
+                content = solution_file.read().decode('utf-8')
+            except UnicodeDecodeError:
+                raise forms.ValidationError(_('Solution file must be UTF-8 text.'))
+            cleaned_data['content'] = content.strip()
+            solution_file.seek(0)
+
+        return cleaned_data
 
 
 class LanguageLimitForm(ModelForm):
@@ -166,6 +232,23 @@ class ProblemEditForm(ModelForm):
         widget=forms.FileInput(attrs={'accept': 'application/pdf'}),
         label=_('Statement file'),
     )
+    solution_content = CharField(
+        required=False,
+        label=_('Solution'),
+        widget=AceWidget(mode='c_cpp', theme='textmate', height='360px'),
+        help_text=_('Official solution source code.'),
+    )
+    solution_language = forms.ModelChoiceField(
+        queryset=Language.objects.none(),
+        required=False,
+        label=_('Solution language'),
+        widget=Select2Widget(attrs={'style': 'width:200px'}),
+    )
+    solution_file = forms.FileField(
+        required=False,
+        label=_('Solution file'),
+        help_text=_('Optional. Upload a UTF-8 text file to auto-fill solution content.'),
+    )
     required_css_class = 'required'
 
     def __init__(self, *args, **kwargs):
@@ -186,6 +269,38 @@ class ProblemEditForm(ModelForm):
         self.fields['testers'].help_text = \
             str(self.fields['testers'].help_text) + ' ' + \
             str(_('You can paste a list of usernames into this box.'))
+        self.fields['solution_language'].queryset = Language.objects.order_by('name')
+        if getattr(self.instance, 'pk', None):
+            allowed = self.instance.allowed_languages.order_by('name')
+            if allowed.exists():
+                self.fields['solution_language'].queryset = allowed
+
+        field_order = [key for key in self.fields.keys() if key not in ('solution_language', 'solution_content', 'solution_file')]
+        if 'description' in field_order:
+            insert_at = field_order.index('description') + 1
+        else:
+            insert_at = len(field_order)
+        field_order[insert_at:insert_at] = ['solution_language', 'solution_content', 'solution_file']
+        self.order_fields(field_order)
+        if getattr(self.instance, 'pk', None):
+            try:
+                solution_content = self.instance.solution.get_content_text() or ''
+                fence_match = re.fullmatch(r'```[^\n]*\n([\s\S]*?)\n```', solution_content.strip())
+                self.initial['solution_content'] = fence_match.group(1) if fence_match else solution_content
+                self.initial['solution_language'] = (
+                    Language.objects.filter(key=self.instance.solution.solution_language_key).first()
+                    or Language.objects.filter(key='CPP17').first()
+                    or Language.get_default_language()
+                )
+            except Solution.DoesNotExist:
+                self.initial['solution_content'] = ''
+                self.initial['solution_language'] = (
+                    Language.objects.filter(key='CPP17').first() or Language.get_default_language()
+                )
+        else:
+            self.initial['solution_language'] = (
+                Language.objects.filter(key='CPP17').first() or Language.get_default_language()
+            )
 
     def clean_code(self):
         code = self.cleaned_data['code']
@@ -220,6 +335,30 @@ class ProblemEditForm(ModelForm):
                                         'problem_timelimit_too_long')
         return self.cleaned_data['time_limit']
 
+    def clean(self):
+        cleaned_data = super(ProblemEditForm, self).clean()
+        solution_content = (cleaned_data.get('solution_content') or '').strip()
+        solution_file = self.files.get('solution_file')
+
+        if solution_file and not solution_content:
+            try:
+                solution_content = solution_file.read().decode('utf-8')
+            except UnicodeDecodeError:
+                raise forms.ValidationError(_('Solution file must be UTF-8 text.'))
+            cleaned_data['solution_content'] = solution_content.strip()
+            solution_file.seek(0)
+
+        solution_language = cleaned_data.get('solution_language')
+        if not solution_language:
+            solution_language = Language.objects.filter(key='CPP17').first() or Language.get_default_language()
+            cleaned_data['solution_language'] = solution_language
+
+        if getattr(self.instance, 'pk', None) and solution_language:
+            if not self.instance.allowed_languages.filter(pk=solution_language.pk).exists():
+                raise forms.ValidationError(_('Solution language must be in allowed languages of this problem.'))
+
+        return cleaned_data
+
     class Meta:
         model = Problem
         fields = ['is_public', 'code', 'name', 'time_limit', 'memory_limit', 'points', 'partial',
@@ -252,6 +391,14 @@ class ProblemEditForm(ModelForm):
                 'invalid': _('Only accept alphanumeric characters (a-z, 0-9) and underscore (_)'),
             },
         }
+
+
+class ProblemCreateForm(ProblemEditForm):
+    def clean(self):
+        cleaned_data = super(ProblemCreateForm, self).clean()
+        if not cleaned_data.get('solution_content'):
+            raise forms.ValidationError(_('Please provide a solution (text or file).'))
+        return cleaned_data
 
 
 class ProposeProblemSolutionFormSet(inlineformset_factory(Problem, Solution, form=ProposeProblemSolutionForm)):

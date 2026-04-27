@@ -1,11 +1,13 @@
 import errno
 import json
+import os
 from operator import attrgetter
 
 from django.conf import settings
 from django.contrib.contenttypes.fields import GenericRelation
 from django.core.cache import cache
 from django.core.exceptions import ValidationError
+from django.core.files.base import ContentFile
 from django.core.validators import MaxValueValidator, MinValueValidator, RegexValidator
 from django.db import models, transaction
 from django.db.models import CASCADE, Exists, F, FilteredRelation, OuterRef, Q, SET_NULL
@@ -617,6 +619,7 @@ class Problem(models.Model):
             ('edit_all_problem', _('Edit all problems')),
             ('edit_public_problem', _('Edit all public problems')),
             ('suggest_new_problem', _('Suggest new problem')),
+            ('quick_submit_problem', _('Quick submit problem')),
             ('problem_full_markup', _('Edit problems with full markup')),
             ('clone_problem', _('Clone problem')),
             ('upload_file_statement', _('Upload file-type statement')),
@@ -669,7 +672,56 @@ class Solution(models.Model):
     is_public = models.BooleanField(verbose_name=_('public visibility'), default=False)
     publish_on = models.DateTimeField(verbose_name=_('publish date'))
     authors = models.ManyToManyField(Profile, verbose_name=_('authors'), blank=True)
+    solution_language_key = models.CharField(max_length=10, verbose_name=_('solution language key'), default='CPP17')
     content = models.TextField(verbose_name=_('editorial content'), validators=[disallowed_characters_validator])
+
+    def _language_extension(self):
+        extension = Language.objects.filter(key=self.solution_language_key).values_list('extension', flat=True).first()
+        return (extension or 'cpp').lstrip('.')
+
+    def _content_file_path_for_extension(self, extension):
+        return os.path.join(self.problem.code, 'solutions', 'official_solution.%s' % extension)
+
+    def content_file_path(self):
+        # Keep official solution source near problem test data for easier backup.
+        return self._content_file_path_for_extension(self._language_extension())
+
+    def _candidate_content_file_paths(self):
+        paths = [self.content_file_path(), self._content_file_path_for_extension('md')]
+        for extension in Language.objects.values_list('extension', flat=True).distinct():
+            ext = (extension or '').lstrip('.')
+            if ext:
+                paths.append(self._content_file_path_for_extension(ext))
+        # Preserve order but remove duplicates.
+        return list(dict.fromkeys(paths))
+
+    def get_content_text(self):
+        try:
+            for path in self._candidate_content_file_paths():
+                if problem_data_storage.exists(path):
+                    with problem_data_storage.open(path, 'rb') as f:
+                        return f.read().decode('utf-8')
+        except Exception:
+            # Fall back to DB content for compatibility/safety.
+            pass
+        return self.content or ''
+
+    def save_content_text(self, text):
+        path = self.content_file_path()
+        for existing_path in self._candidate_content_file_paths():
+            if problem_data_storage.exists(existing_path):
+                problem_data_storage.delete(existing_path)
+        problem_data_storage.save(path, ContentFile(text or ''))
+
+        # Keep DB column empty to avoid storing large solution source in DB.
+        if self.content:
+            self.content = ''
+            self.save(update_fields=['content'])
+
+    def delete_content_file(self):
+        for path in self._candidate_content_file_paths():
+            if problem_data_storage.exists(path):
+                problem_data_storage.delete(path)
 
     def get_absolute_url(self):
         problem = self.problem

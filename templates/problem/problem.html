@@ -144,6 +144,18 @@
             {{ _('Submit solution') }}
         </a>
     {% endif %}
+    {% if request.user.is_authenticated and (problem.is_editor(request.profile) or perms.judge.quick_submit_problem) %}
+        <form method="post" action="{{ url('problem_quick_submit', problem.code) }}" style="margin-top: 0.45em;">
+            {% csrf_token %}
+            <button type="submit" class="unselectable button full">
+                {% if LANGUAGE_CODE.startswith('vi') %}
+                    Nop nhanh
+                {% else %}
+                    Quick submit
+                {% endif %}
+            </button>
+        </form>
+    {% endif %}
 
     <hr style="padding-bottom: 0.3em">
     {% if request.in_contest and contest_problem %}

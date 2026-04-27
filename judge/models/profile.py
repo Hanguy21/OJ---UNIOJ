@@ -191,6 +191,11 @@ class Profile(models.Model):
     data_last_downloaded = models.DateTimeField(verbose_name=_('last data download time'), null=True, blank=True)
     username_display_override = models.CharField(max_length=100, blank=True, verbose_name=_('display name override'),
                                                  help_text=_('Name displayed in place of username.'))
+    uni_student_profile_completed = models.BooleanField(
+        default=True,
+        verbose_name=_('Unicorns student profile completed'),
+        help_text=_('When false, users in the uni-student group are prompted to finish their profile after login.'),
+    )
 
     @cached_property
     def organization(self):

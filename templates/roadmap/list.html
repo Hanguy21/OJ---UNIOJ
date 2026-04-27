@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+
+{% block title_row %}{% endblock %}
+{% block title_ruler %}{% endblock %}
+
+{% block body %}
+    <div class="roadmap-page">
+        <header class="roadmap-hero">
+            <p class="roadmap-hero__eyebrow">{{ _('Premium curriculum') }}</p>
+            <div class="roadmap-hero__headline">
+                <h1 class="roadmap-hero__title">{{ _('Learning Roadmap') }}</h1>
+                {% if can_edit_roadmap %}
+                    <a href="{{ url('admin:judge_roadmaplevel_changelist') }}" class="roadmap-admin-link">
+                        <i class="fa fa-wrench" aria-hidden="true"></i>
+                        <span>{{ _('Admin') }}</span>
+                    </a>
+                {% endif %}
+            </div>
+            <p class="roadmap-hero__subtitle">
+                {{ _('Pick a level, track your progress, and move to the next module with a clean guided flow.') }}
+            </p>
+        </header>
+
+        {% if level_cards %}
+            <section class="roadmap-level-grid" aria-label="{{ _('Roadmap levels') }}">
+                {% for card in level_cards %}
+                    <a class="roadmap-level-card" href="{{ url('roadmap_level_detail', card.level.slug) }}"
+                       style="--roadmap-accent: {{ card.level.accent_color }};">
+                        <div class="roadmap-level-card__line"></div>
+                        <div class="roadmap-level-card__body">
+                            <h2 class="roadmap-level-card__title">{{ _('Level %(level)s', level=card.level.level) }}</h2>
+                            <p class="roadmap-level-card__name">{{ card.level.title }}</p>
+                            <p class="roadmap-level-card__desc">
+                                {{ card.level.subtitle or card.level.description or _('Continue your training path at this stage.') }}
+                            </p>
+                            <div class="roadmap-level-card__meta">
+                                <span>{{ _('%(count)s contests', count=card.contest_count) }}</span>
+                                <span title="{{ _('%(solved)s/%(total)s solved', solved=card.solved, total=card.total) }}">
+                                    {{ _('%(percent)s%% Completed', percent=card.progress_percent) }}
+                                </span>
+                            </div>
+                            <div class="roadmap-level-card__progress" aria-hidden="true">
+                                <span style="width: {{ card.progress_percent }}%"></span>
+                            </div>
+                        </div>
+                    </a>
+                {% endfor %}
+            </section>
+        {% else %}
+            <section class="roadmap-empty">
+                <h2>{{ _('Roadmap is being prepared') }}</h2>
+                <p>{{ _('No public levels yet. Please check back soon.') }}</p>
+                {% if can_edit_roadmap %}
+                    <a href="{{ url('admin:judge_roadmaplevel_changelist') }}" class="roadmap-admin-link">
+                        <i class="fa fa-wrench" aria-hidden="true"></i>
+                        {{ _('Open roadmap admin') }}
+                    </a>
+                {% endif %}
+            </section>
+        {% endif %}
+    </div>
+{% endblock %}

@@ -456,44 +456,130 @@ form.contest-join-pseudotab {
 }
 
 // Contest detail (info tab) — cards, soft headers, corner-safe tables
+.contest #page-container {
+    max-width: 136rem;
+    background: #f7f8fb;
+}
+
+.contest #content {
+    width: 96%;
+}
+
+.contest-heading-meta {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: -2px 0 12px;
+}
+
+.contest-status-chip {
+    display: inline-flex;
+    align-items: center;
+    border-radius: 999px;
+    padding: 4px 10px;
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+}
+
+.contest-status-chip--ended {
+    background: #f5ecec;
+    color: #8e3f3f;
+}
+
+.contest-status-chip--virtual {
+    background: #eceff8;
+    color: #3f568b;
+}
+
+.contest-status-chip--live {
+    background: #e8f5ec;
+    color: #2f7a48;
+}
+
+.contest-status-chip--upcoming {
+    background: #f5f1e5;
+    color: #7d5f2f;
+}
+
+.contest-heading-meta__time {
+    color: var(--theme-text-muted);
+    font-size: 0.84rem;
+}
+
 .contest-detail-page {
-    max-width: 1120px;
+    width: 100%;
+    max-width: none;
     margin: 0 auto;
-    padding: 0 6px 28px;
+    padding: 0 4px 28px;
     box-sizing: border-box;
 
-    #banner {
-        border-radius: 14px;
-        border: 1px solid var(--theme-border);
-        background: var(--theme-card);
-        padding: 1.1em 1.25em;
-        margin-bottom: 1.25em;
-        color: var(--theme-text-muted);
-
-        a.date {
-            color: var(--theme-link);
-        }
-
-        #details,
-        #details ul {
-            color: var(--theme-text-muted);
-        }
+    .contest-detail-grid {
+        display: grid !important;
+        grid-template-columns: minmax(280px, 35%) minmax(0, 65%);
+        gap: 18px;
+        align-items: start;
+        margin-bottom: 1.1em;
     }
 
-    .contest-problems,
+    .contest-card {
+        border: 1px solid var(--theme-border);
+        background: #fff;
+        border-radius: 12px;
+        box-shadow: 0 2px 8px rgba(29, 28, 22, 0.08);
+        padding: 0.95em 1em;
+    }
+
+    .tabs.tabs-dmoj-modern {
+        margin-bottom: 14px;
+    }
+
+    .tabs.tabs-dmoj-modern .tabs-title-row {
+        margin-bottom: 10px;
+    }
+
+    .tabs.tabs-dmoj-modern .tabs-title-row h2 {
+        margin-bottom: 0;
+    }
+
     .contest-clartifications {
-        margin-bottom: 1.75em;
+        margin-bottom: 0.9em;
     }
 
     .contest-problems h2,
-    .contest-clartifications h2 {
+    .contest-clartifications h2,
+    .contest-comments-section h2 {
         font-family: $sans_fonts;
         font-size: 1.12em;
         font-weight: 700;
         color: var(--theme-text);
-        margin: 0 0 0.45em;
-        padding-bottom: 0.35em;
-        border-bottom: 1px solid var(--theme-border);
+        margin: 0;
+        padding: 0;
+        border-bottom: none;
+    }
+
+    .contest-section-header {
+        display: flex !important;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        margin-bottom: 8px;
+    }
+
+    .contest-actions {
+        display: inline-flex !important;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: nowrap;
+    }
+
+    .contest-actions .button,
+    .contest-section-header > .button {
+        display: inline-flex !important;
+        width: auto !important;
+        min-width: 0;
+        white-space: nowrap;
+        padding: 6px 12px;
     }
 
     .contest-problems table.table.striped,
@@ -506,6 +592,15 @@ form.contest-join-pseudotab {
         box-shadow: var(--theme-shadow);
         background: var(--theme-card);
         margin: 10px 0 14px;
+    }
+
+    .contest-problems table.table.striped {
+        margin-bottom: 0;
+    }
+
+    .contest-problems-table-wrap {
+        overflow: auto;
+        border-radius: 12px;
     }
 
     .contest-problems table.table th,
@@ -556,6 +651,24 @@ form.contest-join-pseudotab {
         font-size: 0.9em;
     }
 
+    .contest-problems table.table thead th {
+        position: sticky;
+        top: 0;
+        z-index: 2;
+    }
+
+    .contest-problems table.table th:nth-child(1),
+    .contest-problems table.table td:nth-child(1) {
+        width: 28px;
+        min-width: 28px;
+    }
+
+    .contest-problems table.table th:nth-child(2),
+    .contest-problems table.table td:nth-child(2) {
+        width: 28px;
+        min-width: 28px;
+    }
+
     .contest-problems table.table td,
     .contest-problems table.table th,
     .contest-clartifications table.table td,
@@ -579,7 +692,186 @@ form.contest-join-pseudotab {
         font-weight: 600;
     }
 
+    .button.button-ghost {
+        background: transparent !important;
+        color: var(--theme-text-muted) !important;
+        border: 1px solid var(--theme-border) !important;
+        box-shadow: none !important;
+
+        &:hover {
+            background: var(--theme-row-hover) !important;
+            color: var(--theme-text) !important;
+        }
+    }
+
+    .contest-announcement-feed {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        margin-top: 8px;
+    }
+
+    .contest-announcement-item {
+        border: 1px solid color-mix(in srgb, var(--theme-border) 85%, #ffffff 15%);
+        border-radius: 10px;
+        background: #fff;
+        padding: 8px 10px;
+        position: relative;
+
+        header {
+            display: flex;
+            align-items: baseline;
+            justify-content: flex-start;
+            gap: 8px;
+            margin-bottom: 2px;
+        }
+
+        time {
+            color: var(--theme-text-muted);
+            font-size: 0.8rem;
+            font-style: italic;
+            white-space: nowrap;
+        }
+
+        &__dot {
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            background: #95a9cc;
+            margin-top: 2px;
+            flex-shrink: 0;
+        }
+
+        summary {
+            list-style: none;
+            cursor: pointer;
+            margin: 0;
+            outline: none;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        summary::-webkit-details-marker {
+            display: none;
+        }
+
+        &__preview {
+            display: block;
+            color: var(--theme-text);
+            font-size: 0.94rem;
+            font-weight: 600;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        &__content {
+            color: var(--theme-text);
+            font-size: 0.88rem;
+            line-height: 1.45;
+            margin-top: 4px;
+            display: none;
+        }
+
+        &[open] {
+            summary {
+                margin-bottom: 2px;
+            }
+
+            .contest-announcement-item__preview {
+                white-space: normal;
+            }
+
+            .contest-announcement-item__content {
+                display: block;
+            }
+        }
+    }
+
+    .contest-announcement-empty {
+        margin: 4px 0 0;
+        color: var(--theme-text-muted);
+        font-style: italic;
+    }
+
     .content-description {
         margin-top: 1.25em;
+        border: 1px solid var(--theme-border);
+        background: var(--theme-card);
+        border-radius: 12px;
+        box-shadow: var(--theme-shadow);
+        padding: 1em 1.05em;
+    }
+
+    .contest-comments-section {
+        margin-top: 0.65em;
+        border: 1px solid var(--theme-border);
+        background: var(--theme-card);
+        border-radius: 12px;
+        box-shadow: 0 4px 14px rgba(29, 28, 22, 0.1);
+        padding: 1em 1.05em;
+        position: relative;
+    }
+
+    .contest-comments-social {
+        position: absolute;
+        top: 14px;
+        right: 16px;
+        opacity: 0.65;
+
+        i {
+            font-size: 1.7em;
+        }
+    }
+
+    .contest-comments-section .alert.alert-warning:not(.comment-lock) {
+        border: none !important;
+        background: transparent !important;
+        margin: 0 0 0.5em !important;
+        padding: 0 !important;
+        color: var(--theme-text-muted) !important;
+        font-style: italic !important;
+        box-shadow: none !important;
+    }
+
+    .contest-comments-section #comments > hr:first-of-type,
+    .contest-comments-section #comments > br:first-of-type {
+        display: none;
+    }
+
+    .contest-comments-section #new-comment h3 {
+        margin-top: 0.5em;
+    }
+
+    .contest-comments-section #comments h2 {
+        padding-bottom: 8px;
+        border-bottom: 1px solid var(--theme-border);
+        margin-bottom: 10px;
+    }
+
+    .contest-comments-section .comment-submit-form .wmd-button-row,
+    .contest-comments-section .comment-submit-form .martor-toolbar {
+        max-height: 26px;
+        overflow: hidden;
+        opacity: 0.65;
+        transition: max-height 0.2s ease, opacity 0.2s ease;
+    }
+
+    .contest-comments-section .comment-submit-form:focus-within .wmd-button-row,
+    .contest-comments-section .comment-submit-form:focus-within .martor-toolbar {
+        max-height: 120px;
+        opacity: 1;
+    }
+
+    @media (max-width: 640px) {
+        .contest-heading-meta {
+            flex-wrap: wrap;
+            gap: 6px;
+        }
+
+        .contest-detail-grid {
+            grid-template-columns: 1fr;
+        }
     }
 }

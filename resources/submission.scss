@@ -40,12 +40,12 @@
     display: flex;
     align-items: stretch;
     border: 1px solid var(--sub-border);
-    border-radius: 14px;
+    border-radius: 10px;
     background: var(--sub-card-bg);
     box-shadow: var(--sub-shadow);
-    margin-bottom: 12px;
+    margin-bottom: 6px;
     overflow: hidden;
-    padding: 10px 12px;
+    padding: 6px 8px;
     box-sizing: border-box;
     transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
 
@@ -56,7 +56,7 @@
     }
 
     > div {
-        padding: 11px 10px;
+        padding: 6px 8px;
         vertical-align: middle;
         display: flex;
         flex-direction: column;
@@ -72,23 +72,25 @@
     > .sub-result .sub-result-link {
         flex: 1 1 auto;
         display: flex;
-        flex-direction: column;
+        flex-direction: row;
+        align-items: center;
         justify-content: center;
-        padding: 10px 8px;
+        gap: 0.35rem;
+        padding: 6px 6px;
         min-height: 100%;
         box-sizing: border-box;
     }
 
     > .sub-result:not(:has(.sub-result-link)) {
-        padding: 10px 8px;
+        padding: 6px 6px;
     }
 
     > .sub-main {
-        padding: 8px 12px 8px 16px;
+        padding: 4px 10px 4px 12px;
     }
 
     > .sub-usage {
-        padding: 10px 12px;
+        padding: 6px 8px;
         justify-content: center;
     }
 
@@ -96,8 +98,8 @@
     .sub-result {
         align-self: center;
         flex-shrink: 0;
-        min-width: 128px;
-        width: 128px;
+        min-width: 158px;
+        width: 158px;
         text-align: center;
         border-right: none;
         border-radius: 12px;
@@ -107,7 +109,11 @@
         color: #92400e;
 
         .sub-result-link {
-            display: block;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.35rem;
+            flex-wrap: nowrap;
             color: inherit;
             text-decoration: none;
             border-radius: 10px;
@@ -120,14 +126,17 @@
         }
 
         .state {
-            font-size: 0.7em;
+            font-size: 0.72em;
             font-weight: 700;
-            padding-top: 0.35em;
+            padding-top: 0;
             white-space: nowrap;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.2rem;
 
             .status {
                 display: inline-block;
-                padding: 0.08rem 0.32rem;
+                padding: 0.02rem 0.24rem;
                 border-radius: 999px;
                 background: rgba(0, 0, 0, 0.06);
                 color: inherit;
@@ -140,8 +149,9 @@
 
         .score {
             font-weight: 700;
-            font-size: 0.95em;
+            font-size: 0.86em;
             font-variant-numeric: tabular-nums;
+            white-space: nowrap;
 
             .grading-spinner {
                 color: #d97757;
@@ -290,8 +300,8 @@
 
             .name {
                 font-weight: 700;
-                font-size: 1.1em;
-                line-height: 1.35;
+                font-size: 1.02em;
+                line-height: 1.25;
 
                 a {
                     color: #1d1c16;
@@ -307,8 +317,8 @@
             .time,
             .sub-meta__when {
                 color: var(--sub-muted, #888888);
-                font-size: 0.9em;
-                line-height: 1.35;
+                font-size: 0.78em;
+                line-height: 1.2;
             }
 
             .sub-meta__when .time-with-rel {
@@ -320,9 +330,9 @@
                 flex-wrap: wrap;
                 align-items: baseline;
                 gap: 0.35em 0.45em;
-                margin-top: 0.2em;
-                font-size: 0.92em;
-                line-height: 1.4;
+                margin-top: 0.05em;
+                font-size: 0.84em;
+                line-height: 1.2;
             }
 
             .sub-meta__user,
@@ -374,7 +384,8 @@
             flex-wrap: wrap;
 
             > div {
-                line-height: 1.9;
+                line-height: 1.45;
+                font-size: 12px;
             }
 
             a {
@@ -383,11 +394,12 @@
                 border: 1px solid #e6e4dd;
                 background: #f9f8f6;
                 border-radius: 999px;
-                padding: 0.08rem 0.6rem;
+                padding: 0.05rem 0.42rem;
                 display: inline-flex;
                 align-items: center;
                 gap: 0.2rem;
                 text-decoration: none;
+                font-size: 12px;
 
                 &:hover {
                     background: #edece8;
@@ -404,8 +416,8 @@
     }
 
     .sub-usage {
-        min-width: 82px;
-        width: 82px;
+        min-width: 74px;
+        width: 74px;
         white-space: nowrap;
         text-align: center;
         align-self: stretch;
@@ -417,15 +429,15 @@
             font-weight: 600;
             font-variant-numeric: tabular-nums;
             color: var(--sub-muted);
-            font-size: 0.9em;
-            line-height: 1.3;
+            font-size: 0.78em;
+            line-height: 1.15;
         }
 
         .memory {
             color: var(--sub-muted);
             font-variant-numeric: tabular-nums;
-            font-size: 0.88em;
-            line-height: 1.3;
+            font-size: 0.76em;
+            line-height: 1.15;
         }
     }
 }

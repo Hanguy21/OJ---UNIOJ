@@ -97,3 +97,29 @@
         </form>
     {% endif %}
 {% endblock %}
+
+{% block post_tab_spacer %}
+    <div class="contest-heading-meta">
+        {% if contest.start_time > now %}
+            <span class="contest-status-chip contest-status-chip--upcoming">{{ _('Upcoming') }}</span>
+        {% elif contest.end_time < now %}
+            <span class="contest-status-chip contest-status-chip--ended">{{ _('Ended') }}</span>
+        {% elif contest.is_in_contest(request.user) and not request.participation.live %}
+            <span class="contest-status-chip contest-status-chip--virtual">{{ _('Virtual') }}</span>
+        {% else %}
+            <span class="contest-status-chip contest-status-chip--live">{{ _('Live') }}</span>
+        {% endif %}
+        <span class="contest-heading-meta__time">
+            {% with start_time=contest.start_time|date(_("F j, Y, G:i T")) %}
+                {% if contest.time_limit %}
+                    {% set end_time=contest.end_time|date(_("F j, Y, G:i T")) %}
+                    {% set time_limit=contest.time_limit|timedelta('localized-no-seconds') %}
+                    {{ _('%(time_limit)s window between %(start_time)s and %(end_time)s', start_time=bold(start_time), end_time=bold(end_time), time_limit=bold(time_limit)) }}
+                {% else %}
+                    {% set length=contest.contest_window_length|timedelta('localized-no-seconds') %}
+                    {{ _('%(length)s long starting on %(start_time)s', start_time=bold(start_time), length=bold(length)) }}
+                {% endif %}
+            {% endwith %}
+        </span>
+    </div>
+{% endblock %}

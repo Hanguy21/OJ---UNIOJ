@@ -65,6 +65,15 @@ class DMOJLoginMiddleware(object):
                     not request.path.startswith(settings.STATIC_URL) and
                     not request.official_contest_mode):
                 return HttpResponseRedirect(change_password_path + '?next=' + quote(request.get_full_path()))
+            elif (not request.user.is_staff and
+                  not getattr(request.user, 'is_impersonate', False) and
+                  not getattr(profile, 'uni_student_profile_completed', True) and
+                  request.user.groups.filter(name=getattr(settings, 'GROUP_UNI_STUDENT', 'uni-student')).exists() and
+                  not request.path.startswith('/accounts/') and
+                  request.path not in (logout_path, login_2fa_path, webauthn_path) and
+                  not request.path.startswith(settings.STATIC_URL) and
+                  not request.path.startswith(reverse('admin:index'))):
+                return HttpResponseRedirect(reverse('uni_student_onboarding') + '?next=' + quote(request.get_full_path()))
         else:
             request.profile = None
         return self.get_response(request)

@@ -14,14 +14,20 @@ from judge.widgets import AdminMartorWidget, AdminSelect2MultipleWidget, AdminSe
 class ProfileForm(ModelForm):
     def __init__(self, *args, **kwargs):
         super(ProfileForm, self).__init__(*args, **kwargs)
-        self.fields['display_badge'].queryset = self.instance.badges.all()
         self.fields['display_badge'].required = False
+        if self.instance.pk:
+            self.fields['display_badge'].queryset = self.instance.badges.all()
+        else:
+            self.fields['display_badge'].queryset = Profile._meta.get_field('display_badge').related_model.objects.none()
         if 'current_contest' in self.base_fields:
             # form.fields['current_contest'] does not exist when the user has only view permission on the model.
-            self.fields['current_contest'].queryset = self.instance.contest_history.select_related('contest') \
-                .only('contest__name', 'user_id', 'virtual')
-            self.fields['current_contest'].label_from_instance = \
-                lambda obj: '%s v%d' % (obj.contest.name, obj.virtual) if obj.virtual else obj.contest.name
+            if self.instance.pk:
+                self.fields['current_contest'].queryset = self.instance.contest_history.select_related('contest') \
+                    .only('contest__name', 'user_id', 'virtual')
+                self.fields['current_contest'].label_from_instance = \
+                    lambda obj: '%s v%d' % (obj.contest.name, obj.virtual) if obj.virtual else obj.contest.name
+            else:
+                self.fields['current_contest'].queryset = self.fields['current_contest'].queryset.none()
 
     class Meta:
         widgets = {

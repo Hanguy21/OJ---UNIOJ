@@ -1,6 +1,9 @@
 {% extends "tabs-base.html" %}
 
 {% block tabs %}
+    {% if request.user.is_staff %}
+        {{ make_tab('unicorns_edu', 'fa-graduation-cap', url('unicorns_edu_list'), _('Unicorns Edu')) }}
+    {% endif %}
     {{ make_tab('list', 'fa-users', url('user_list'), _('Leaderboard')) }}
     {{ make_tab('contributor', 'fa-thumbs-up', url('contributors_list'), _('Contributors')) }}
     {{ make_tab('organizations', 'fa-university', url('organization_list'), _('Organizations')) }}

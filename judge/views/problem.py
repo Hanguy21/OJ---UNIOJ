@@ -16,6 +16,7 @@ from django.contrib import messages
 from django.contrib.auth.models import User
 from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin
 from django.core.exceptions import ObjectDoesNotExist, PermissionDenied
+from django.core.management.base import CommandError as DjangoCommandError
 from django.db import transaction
 from django.db.models import BooleanField, Case, F, Prefetch, Q, When
 from django.db.utils import ProgrammingError
@@ -1000,6 +1001,11 @@ class ProblemImportPolygon(PermissionRequiredMixin, TitleMixin, TemplateResponse
 
         authors, curators = self._build_default_owners(request.user)
         problem_ref = cleaned['problem'].strip()
+        normalized_problem_ref = self._normalize_problem_ref(problem_ref, api_key, api_secret)
+        if normalized_problem_ref is None:
+            messages.error(request, _('Cannot resolve Polygon problem ID from the provided URL/input.'))
+            return self._render(request, form)
+        problem_ref = normalized_problem_ref
         timeout = 900
 
         if not request.session.session_key:
@@ -1041,6 +1047,31 @@ class ProblemImportPolygon(PermissionRequiredMixin, TitleMixin, TemplateResponse
             return problem_ref
         match = re.search(r'(\d+)$', problem_ref)
         return match.group(1) if match else None
+
+    @staticmethod
+    def _normalize_problem_ref(problem_ref, api_key, api_secret):
+        candidate = (problem_ref or '').strip()
+        if not candidate:
+            return None
+        if candidate.isdigit():
+            return candidate
+
+        # Reuse command parser/resolver so web import and CLI import share one ID flow.
+        from judge.management.commands.import_polygon import Command as PolygonImportCommand, PolygonClient
+
+        resolver = PolygonImportCommand()
+        problem_id = resolver._extract_problem_id(candidate)
+        if problem_id is None:
+            base_url = os.environ.get('POLYGON_API_BASE_URL', 'https://polygon.codeforces.com/api/').strip()
+            client = PolygonClient(api_key=api_key, api_secret=api_secret, base_url=base_url)
+            try:
+                problem_id = resolver._resolve_problem_id(client, candidate)
+            except DjangoCommandError:
+                return None
+
+        if problem_id is None:
+            return None
+        return str(problem_id)
 
     @staticmethod
     def _extract_progress(logs, success=False):

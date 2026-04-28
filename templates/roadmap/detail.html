@@ -97,7 +97,7 @@
                                     {% if entry.is_complete %}
                                         <i class="fa fa-check-circle roadmap-contest-row__done" aria-hidden="true" title="{{ _('Completed') }}"></i>
                                     {% endif %}
-                                    <span>{{ entry.index }}. {{ entry.name }}</span>
+                                    <span class="roadmap-contest-row__title" data-name="{{ entry.name|escape }}">{{ entry.index }}. {{ entry.name }}</span>
                                 </h3>
                                 {% if entry.summary %}
                                     <p>{{ entry.summary }}</p>
@@ -175,6 +175,13 @@
                 var $keepEditInputs = $('.js-keep-edit-mode');
                 var $contestSelect = $('#roadmap-contest-select');
                 var $indicator = $('<div class="roadmap-drop-indicator" aria-hidden="true"></div>');
+                var $reorderForm = $('#roadmap-reorder-form');
+                var dragging = null;
+                var isSaving = false;
+                var hasQueuedSave = false;
+                var lastIndicatorKey = '';
+                var dragFrameRequested = false;
+                var latestPointerY = null;
 
                 function setEditMode(enabled) {
                     $page.toggleClass('roadmap-edit-mode', enabled);
@@ -207,10 +214,12 @@
                     }).css({'visibility': 'visible'});
                 }
 
-                var dragging = null;
                 $rows.on('dragstart', function (event) {
                     if (!$page.hasClass('roadmap-edit-mode')) return;
                     dragging = this;
+                    lastIndicatorKey = '';
+                    dragFrameRequested = false;
+                    latestPointerY = null;
                     event.originalEvent.dataTransfer.setData('text/plain', String($(this).data('mapping-id')));
                     event.originalEvent.dataTransfer.effectAllowed = 'move';
                     $(this).addClass('is-dragging');
@@ -218,23 +227,112 @@
                 $rows.on('dragend', function () {
                     $(this).removeClass('is-dragging');
                     $indicator.detach();
+                    dragging = null;
+                    lastIndicatorKey = '';
+                    dragFrameRequested = false;
+                    latestPointerY = null;
                 });
+
+                function captureRowPositions() {
+                    var positions = {};
+                    $('.roadmap-contest-row').each(function () {
+                        var $row = $(this);
+                        positions[$row.data('mapping-id')] = $row.offset().top;
+                    });
+                    return positions;
+                }
+
+                function animateRowReflow(previousPositions) {
+                    $('.roadmap-contest-row').each(function () {
+                        var $row = $(this);
+                        var rowId = $row.data('mapping-id');
+                        var beforeTop = previousPositions[rowId];
+                        if (typeof beforeTop === 'undefined') return;
+                        var afterTop = $row.offset().top;
+                        var delta = beforeTop - afterTop;
+                        if (!delta) return;
+                        $row.css('transform', 'translateY(' + delta + 'px)');
+                        $row[0].offsetHeight;
+                        $row.css('transform', '');
+                    });
+                }
+
+                function updateRoadmapIndexesAndPayload() {
+                    var ordered = [];
+                    $('.roadmap-contest-row').each(function (index) {
+                        var $row = $(this);
+                        ordered.push($row.data('mapping-id'));
+                        var $title = $row.find('.roadmap-contest-row__title');
+                        var name = $title.data('name') || $title.text().replace(/^\d+\.\s*/, '');
+                        $title.text((index + 1) + '. ' + name);
+                    });
+                    $reorderForm.find('input[name=ordered_ids]').val(ordered.join(','));
+                }
+
+                function saveRoadmapOrderRealtime() {
+                    if (isSaving) {
+                        hasQueuedSave = true;
+                        return;
+                    }
+                    isSaving = true;
+                    $page.addClass('roadmap-drag-saving');
+
+                    $.ajax({
+                        type: 'POST',
+                        url: window.location.pathname,
+                        data: $reorderForm.serialize(),
+                        headers: {'X-Requested-With': 'XMLHttpRequest'},
+                    }).always(function () {
+                        isSaving = false;
+                        $page.removeClass('roadmap-drag-saving');
+                        if (hasQueuedSave) {
+                            hasQueuedSave = false;
+                            saveRoadmapOrderRealtime();
+                        }
+                    });
+                }
+
+                function findInsertionTarget(pointerY) {
+                    var closest = null;
+                    var closestOffset = Number.NEGATIVE_INFINITY;
+                    $('.roadmap-contest-row').not('.is-dragging').each(function () {
+                        var rect = this.getBoundingClientRect();
+                        var offset = pointerY - rect.top - rect.height / 2;
+                        if (offset < 0 && offset > closestOffset) {
+                            closestOffset = offset;
+                            closest = this;
+                        }
+                    });
+                    return closest;
+                }
+
+                function scheduleIndicatorUpdate() {
+                    if (dragFrameRequested) return;
+                    dragFrameRequested = true;
+                    window.requestAnimationFrame(function () {
+                        dragFrameRequested = false;
+                        if (!$page.hasClass('roadmap-edit-mode') || !dragging || latestPointerY === null) return;
+
+                        var target = findInsertionTarget(latestPointerY);
+                        var desiredKey = target ? ('before:' + String($(target).data('mapping-id'))) : '__end__';
+                        if (desiredKey === lastIndicatorKey) return;
+
+                        var previousPositions = captureRowPositions();
+                        if (target) {
+                            $(target).before($indicator);
+                        } else {
+                            $list.append($indicator);
+                        }
+                        animateRowReflow(previousPositions);
+                        lastIndicatorKey = desiredKey;
+                    });
+                }
 
                 $list.on('dragover', function (event) {
                     if (!$page.hasClass('roadmap-edit-mode') || !dragging) return;
                     event.preventDefault();
-
-                    var $target = $(event.target).closest('.roadmap-contest-row');
-                    if (!$target.length || $target[0] === dragging) {
-                        $list.append($indicator);
-                    } else {
-                        var midpoint = $target.offset().top + $target.outerHeight() / 2;
-                        if (event.originalEvent.clientY < midpoint) {
-                            $target.before($indicator);
-                        } else {
-                            $target.after($indicator);
-                        }
-                    }
+                    latestPointerY = event.originalEvent.clientY;
+                    scheduleIndicatorUpdate();
                 });
 
                 $list.on('drop', function (event) {
@@ -242,19 +340,21 @@
                     event.preventDefault();
 
                     var $dragging = $(dragging);
+                    var previousPositions = captureRowPositions();
                     if ($indicator.parent().length) {
                         $indicator.before($dragging);
                         $indicator.detach();
                     } else {
                         $list.append($dragging);
                     }
+                    animateRowReflow(previousPositions);
 
-                    var ordered = [];
-                    $('.roadmap-contest-row').each(function () {
-                        ordered.push($(this).data('mapping-id'));
-                    });
-                    $('#roadmap-reorder-form input[name=ordered_ids]').val(ordered.join(','));
-                    $('#roadmap-reorder-form').trigger('submit');
+                    updateRoadmapIndexesAndPayload();
+                    saveRoadmapOrderRealtime();
+                    dragging = null;
+                    lastIndicatorKey = '';
+                    dragFrameRequested = false;
+                    latestPointerY = null;
                 });
             });
         </script>

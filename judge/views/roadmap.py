@@ -3,7 +3,7 @@ from collections import defaultdict
 from django.contrib import messages
 from django.db.models import Max
 from django.core.exceptions import PermissionDenied
-from django.http import Http404, HttpResponseForbidden
+from django.http import Http404, HttpResponseForbidden, JsonResponse
 from django.shortcuts import redirect
 from django.urls import reverse
 from django.utils.translation import gettext as _
@@ -40,7 +40,10 @@ def can_view_roadmap(user):
 
 def visible_roadmap_contests(level, user):
     links = level.roadmap_contests.select_related('contest').order_by('order', 'id')
-    return [link for link in links if link.contest.is_accessible_by(user)]
+    visible_links = [link for link in links if link.contest.is_accessible_by(user)]
+    pinned_name = aggregate_level_contest_name(level.level)
+    visible_links.sort(key=lambda link: (0 if link.contest.name == pinned_name else 1, link.order, link.id))
+    return visible_links
 
 
 def level_progress(user, contest_ids):
@@ -176,6 +179,8 @@ class RoadmapLevelDetail(TemplateView):
                     row.order = index
                     row.save(update_fields=['order'])
             messages.success(request, _('Roadmap order has been updated.'))
+            if request.headers.get('x-requested-with') == 'XMLHttpRequest':
+                return JsonResponse({'ok': True})
         elif action == 'remove':
             mapping_id = request.POST.get('mapping_id')
             if mapping_id and mapping_id.isdigit():

@@ -573,6 +573,20 @@ form.contest-join-pseudotab {
         flex-wrap: nowrap;
     }
 
+    .roadmap-edit-only {
+        display: none;
+    }
+
+    &.contest-edit-mode {
+        .roadmap-edit-only {
+            display: block;
+        }
+    }
+
+    .contest-edit-switch {
+        margin-right: 4px;
+    }
+
     .contest-actions .button,
     .contest-section-header > .button {
         display: inline-flex !important;
@@ -667,6 +681,76 @@ form.contest-join-pseudotab {
     .contest-problems table.table td:nth-child(2) {
         width: 28px;
         min-width: 28px;
+    }
+
+    .contest-grip-col {
+        width: 32px;
+        min-width: 32px;
+    }
+
+    .contest-problem-grip {
+        width: 32px;
+        text-align: center;
+        color: var(--theme-text-muted);
+        opacity: 0.65;
+        cursor: default;
+        user-select: none;
+    }
+
+    &.contest-edit-mode {
+        .contest-problem-grip {
+            cursor: move;
+            opacity: 1;
+        }
+    }
+
+    .js-contest-problem-row.is-dragging {
+        opacity: 0.55;
+    }
+
+    .js-contest-problem-row {
+        transition: transform 0.18s ease, box-shadow 0.18s ease, opacity 0.18s ease;
+        will-change: transform;
+    }
+
+    &.contest-drag-saving .contest-problem-grip {
+        opacity: 0.55;
+    }
+
+    .contest-drop-indicator-row td {
+        background: transparent !important;
+        border: none !important;
+        padding: 0 10px;
+    }
+
+    .contest-drop-indicator {
+        height: 3px;
+        border-radius: 999px;
+        background: #8da2c7;
+        margin: 4px 0;
+    }
+
+    .contest-add-problem {
+        margin-top: 12px;
+    }
+
+    .contest-problem-actions {
+        width: 90px;
+        text-align: center;
+    }
+
+    .contest-problem-remove {
+        border: 1px solid var(--theme-border);
+        background: transparent;
+        color: #b24a4a;
+        border-radius: 8px;
+        padding: 4px 10px;
+        font-size: 0.9em;
+        cursor: pointer;
+    }
+
+    .contest-problem-remove:hover {
+        background: rgba(178, 74, 74, 0.08);
     }
 
     .contest-problems table.table td,

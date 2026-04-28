@@ -26,6 +26,195 @@
             });
         });
     </script>
+    {% if can_manage_contest_problems %}
+        <script type="text/javascript">
+            $(function () {
+                var $page = $('.contest-detail-page');
+                var $toggle = $('#contest-edit-toggle');
+                var $rows = $('.js-contest-problem-row');
+                var $list = $('.js-contest-problem-list');
+                var $problemSelect = $('#contest-problem-select');
+                var colspan = Math.max(1, $('.contest-problems table thead th').length);
+                var $indicator = $('<tr class="contest-drop-indicator-row" aria-hidden="true"><td colspan="' + colspan + '"><div class="contest-drop-indicator"></div></td></tr>');
+                var $reorderForm = $('#contest-reorder-form');
+                var dragging = null;
+                var isSaving = false;
+                var hasQueuedSave = false;
+                var lastIndicatorKey = '';
+                var dragFrameRequested = false;
+                var latestPointerY = null;
+
+                function setEditMode(enabled) {
+                    $page.toggleClass('contest-edit-mode', enabled);
+                    $toggle.prop('checked', enabled);
+                    $rows.attr('draggable', enabled ? 'true' : 'false');
+                }
+
+                setEditMode({% if edit_mode_enabled %}true{% else %}false{% endif %});
+
+                $toggle.on('change', function () {
+                    setEditMode($toggle.is(':checked'));
+                });
+
+                if ($problemSelect.length) {
+                    $problemSelect.select2({
+                        theme: '{{ DMOJ_SELECT2_THEME }}',
+                        placeholder: '{{ _('Select problem...')|escapejs }}',
+                        minimumResultsForSearch: 0,
+                        width: '100%',
+                        language: {
+                            noResults: function () {
+                                return '{{ _('No problems found.')|escapejs }}';
+                            }
+                        },
+                        escapeMarkup: function (markup) {
+                            return markup;
+                        }
+                    }).css({'visibility': 'visible'});
+                }
+
+                function captureRowPositions() {
+                    var positions = {};
+                    $('.js-contest-problem-row').each(function () {
+                        var $row = $(this);
+                        positions[$row.data('mapping-id')] = $row.offset().top;
+                    });
+                    return positions;
+                }
+
+                function animateRowReflow(previousPositions) {
+                    $('.js-contest-problem-row').each(function () {
+                        var $row = $(this);
+                        var rowId = $row.data('mapping-id');
+                        var beforeTop = previousPositions[rowId];
+                        if (typeof beforeTop === 'undefined') return;
+                        var afterTop = $row.offset().top;
+                        var delta = beforeTop - afterTop;
+                        if (!delta) return;
+                        $row.css('transform', 'translateY(' + delta + 'px)');
+                        $row[0].offsetHeight;
+                        $row.css('transform', '');
+                    });
+                }
+
+                function updateOrderedIdsAndIndex() {
+                    var ordered = [];
+                    $('.js-contest-problem-row').each(function (index) {
+                        var $row = $(this);
+                        ordered.push($row.data('mapping-id'));
+                        $row.find('td').first().text(index + 1);
+                    });
+                    $reorderForm.find('input[name=ordered_ids]').val(ordered.join(','));
+                }
+
+                function saveOrderRealtime() {
+                    if (isSaving) {
+                        hasQueuedSave = true;
+                        return;
+                    }
+                    isSaving = true;
+                    $page.addClass('contest-drag-saving');
+
+                    $.ajax({
+                        type: 'POST',
+                        url: window.location.pathname,
+                        data: $reorderForm.serialize(),
+                        headers: {'X-Requested-With': 'XMLHttpRequest'},
+                    }).always(function () {
+                        isSaving = false;
+                        $page.removeClass('contest-drag-saving');
+                        if (hasQueuedSave) {
+                            hasQueuedSave = false;
+                            saveOrderRealtime();
+                        }
+                    });
+                }
+
+                $rows.on('dragstart', function (event) {
+                    if (!$page.hasClass('contest-edit-mode')) return;
+                    dragging = this;
+                    lastIndicatorKey = '';
+                    dragFrameRequested = false;
+                    latestPointerY = null;
+                    event.originalEvent.dataTransfer.effectAllowed = 'move';
+                    $(this).addClass('is-dragging');
+                });
+                $rows.on('dragend', function () {
+                    $(this).removeClass('is-dragging');
+                    $indicator.detach();
+                    dragging = null;
+                    lastIndicatorKey = '';
+                    dragFrameRequested = false;
+                    latestPointerY = null;
+                });
+
+                function findInsertionTarget(pointerY) {
+                    var closest = null;
+                    var closestOffset = Number.NEGATIVE_INFINITY;
+                    $('.js-contest-problem-row').not('.is-dragging').each(function () {
+                        var rect = this.getBoundingClientRect();
+                        var offset = pointerY - rect.top - rect.height / 2;
+                        if (offset < 0 && offset > closestOffset) {
+                            closestOffset = offset;
+                            closest = this;
+                        }
+                    });
+                    return closest;
+                }
+
+                function scheduleIndicatorUpdate() {
+                    if (dragFrameRequested) return;
+                    dragFrameRequested = true;
+                    window.requestAnimationFrame(function () {
+                        dragFrameRequested = false;
+                        if (!$page.hasClass('contest-edit-mode') || !dragging || latestPointerY === null) return;
+
+                        var target = findInsertionTarget(latestPointerY);
+                        var desiredKey = target ? ('before:' + String($(target).data('mapping-id'))) : '__end__';
+                        if (desiredKey === lastIndicatorKey) return;
+
+                        var previousPositions = captureRowPositions();
+                        if (target) {
+                            $(target).before($indicator);
+                        } else {
+                            $list.append($indicator);
+                        }
+                        animateRowReflow(previousPositions);
+                        lastIndicatorKey = desiredKey;
+                    });
+                }
+
+                $list.on('dragover', function (event) {
+                    if (!$page.hasClass('contest-edit-mode') || !dragging) return;
+                    event.preventDefault();
+                    latestPointerY = event.originalEvent.clientY;
+                    scheduleIndicatorUpdate();
+                });
+
+                $list.on('drop', function (event) {
+                    if (!$page.hasClass('contest-edit-mode') || !dragging) return;
+                    event.preventDefault();
+
+                    var $dragging = $(dragging);
+                    var previousPositions = captureRowPositions();
+                    if ($indicator.parent().length) {
+                        $indicator.before($dragging);
+                        $indicator.detach();
+                    } else {
+                        $list.append($dragging);
+                    }
+                    animateRowReflow(previousPositions);
+
+                    updateOrderedIdsAndIndex();
+                    saveOrderRealtime();
+                    dragging = null;
+                    lastIndicatorKey = '';
+                    dragFrameRequested = false;
+                    latestPointerY = null;
+                });
+            });
+        </script>
+    {% endif %}
     {% include "contest/media-js.html" %}
     {% if not comment_lock %}
         {% include "comments/media-js.html" %}
@@ -109,6 +298,14 @@
                     <div class="contest-section-header">
                         <h2><i class="fa fa-fw fa-question-circle"></i>{{ _('Problems') }}</h2>
                         <div class="contest-actions">
+                            {% if can_manage_contest_problems %}
+                                <label class="roadmap-edit-switch contest-edit-switch">
+                                    <input id="contest-edit-toggle" class="roadmap-edit-switch__input" type="checkbox"
+                                           aria-label="{{ _('Edit mode') }}">
+                                    <span class="roadmap-edit-switch__slider" aria-hidden="true"></span>
+                                    <span class="roadmap-edit-switch__label">{{ _('Edit mode') }}</span>
+                                </label>
+                            {% endif %}
                             <a class="button button-ghost" href="{{ url('contest_all_problems', contest.key) }}">{{ _('All problems') }}</a>
                             {% if can_edit and can_download_data %}
                                 <a class="button" href="{{ url('contest_prepare_data', contest.key) }}">{{ _('Download data') }}</a>
@@ -120,6 +317,9 @@
                 <thead>
                 <tr>
                     <th>#</th>
+                    {% if can_manage_contest_problems %}
+                        <th class="contest-grip-col"></th>
+                    {% endif %}
                     {% if request.user.is_authenticated %}
                         <th><i class="fa fa-check"></i></th>
                     {% endif %}
@@ -130,12 +330,19 @@
                     {% if metadata.has_public_editorials %}
                         <th>{{ _('Editorials') }}</th>
                     {% endif %}
+                    {% if can_manage_contest_problems %}
+                        <th>{{ _('Actions') }}</th>
+                    {% endif %}
                 </tr>
                 </thead>
-                <tbody>
-                {% for problem in contest_problems %}
-                    <tr>
+                <tbody class="js-contest-problem-list">
+                {% for row in contest_problem_rows %}
+                    {% set problem = row.problem %}
+                    <tr class="js-contest-problem-row" data-mapping-id="{{ row.mapping_id }}" draggable="false">
                         <td style="width: 1em;">{{loop.index}}</td>
+                        {% if can_manage_contest_problems %}
+                            <td class="contest-problem-grip" aria-hidden="true">⋮⋮</td>
+                        {% endif %}
                         {% if request.user.is_authenticated %}
                             {% if problem.id in completed_problem_ids %}
                                 <td style="width: 1em;">
@@ -175,7 +382,7 @@
                             {% endif %}
                         </td>
                         {% if not is_ICPC_format %}
-                            <td>{{ problem.points|floatformat(-2) }}</td>
+                            <td>{{ row.points|floatformat(-2) }}</td>
                         {% endif %}
                         {% if metadata.has_public_editorials %}
                             <td>
@@ -184,11 +391,47 @@
                                 {% endif %}
                             </td>
                         {% endif %}
+                        {% if can_manage_contest_problems %}
+                            <td class="contest-problem-actions">
+                                <form method="post" class="roadmap-edit-only">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="action" value="remove_problem">
+                                    <input type="hidden" name="mapping_id" value="{{ row.mapping_id }}">
+                                    <button type="submit" class="contest-problem-remove">{{ _('Remove') }}</button>
+                                </form>
+                            </td>
+                        {% endif %}
                     </tr>
                 {% endfor %}
                 </tbody>
                     </table>
                     </div>
+
+                    {% if can_manage_contest_problems %}
+                        <section class="roadmap-edit-only roadmap-add-contest contest-add-problem">
+                            <form method="post">
+                                {% csrf_token %}
+                                <input type="hidden" name="action" value="add_problem">
+                                <label for="contest-problem-select">{{ _('Add problem to this contest') }}</label>
+                                <div class="roadmap-add-contest__row">
+                                    <select id="contest-problem-select" name="problem_id">
+                                        <option value="">{{ _('Select problem...') }}</option>
+                                        {% for problem in available_contest_problems %}
+                                            <option value="{{ problem.id }}">{{ problem.code }} - {{ problem.name }}</option>
+                                        {% endfor %}
+                                    </select>
+                                    <button type="submit">{{ _('Add problem') }}</button>
+                                </div>
+                            </form>
+                        </section>
+
+                        <form id="contest-reorder-form" method="post" class="roadmap-edit-only">
+                            {% csrf_token %}
+                            <input type="hidden" name="action" value="reorder_problems">
+                            <input type="hidden" name="keep_edit_mode" value="1">
+                            <input type="hidden" name="ordered_ids" value="">
+                        </form>
+                    {% endif %}
                 </section>
             {% endif %}
         </section>

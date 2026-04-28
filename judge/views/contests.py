@@ -8,6 +8,7 @@ from operator import attrgetter, itemgetter
 
 from django import forms
 from django.conf import settings
+from django.contrib import messages
 from django.contrib.auth.context_processors import PermWrapper
 from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin
 from django.core.cache import cache
@@ -16,7 +17,7 @@ from django.db import IntegrityError
 from django.db.models import BooleanField, Case, Count, F, FloatField, IntegerField, Max, Min, Q, Sum, Value, When
 from django.db.models.expressions import CombinedExpression
 from django.db.models.query import Prefetch
-from django.http import Http404, HttpResponse, HttpResponseForbidden, HttpResponseRedirect
+from django.http import Http404, HttpResponse, HttpResponseForbidden, HttpResponseRedirect, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.template.defaultfilters import date as date_filter, floatformat
 from django.template.loader import get_template
@@ -265,6 +266,59 @@ class ContestMixin(object):
 class ContestDetail(ContestMixin, TitleMixin, CommentedDetailView):
     template_name = 'contest/contest.html'
 
+    def post(self, request, *args, **kwargs):
+        self.object = self.get_object()
+        action = request.POST.get('action')
+        if action not in ('add_problem', 'reorder_problems', 'remove_problem'):
+            return super().post(request, *args, **kwargs)
+
+        if not self.object.is_editable_by(request.user):
+            return HttpResponseForbidden()
+
+        if action == 'add_problem':
+            problem_id = request.POST.get('problem_id')
+            if problem_id and problem_id.isdigit():
+                visible_problem = Problem.get_visible_problems(request.user).filter(id=int(problem_id)).first()
+                if visible_problem:
+                    max_order = self.object.contest_problems.aggregate(m=Max('order'))['m'] or 0
+                    try:
+                        ContestProblem.objects.create(
+                            contest=self.object,
+                            problem=visible_problem,
+                            points=max(0, int(round(visible_problem.points or 0))),
+                            order=max_order + 1,
+                        )
+                        messages.success(request, _('Problem has been added to this contest.'))
+                    except IntegrityError:
+                        messages.warning(request, _('This problem is already in the contest.'))
+                else:
+                    messages.error(request, _('You cannot add this problem to the contest.'))
+        elif action == 'reorder_problems':
+            ordered_ids = request.POST.get('ordered_ids', '')
+            ids = [int(value) for value in ordered_ids.split(',') if value.isdigit()]
+            lookup = {row.id: row for row in self.object.contest_problems.all()}
+            for index, row_id in enumerate(ids, start=1):
+                row = lookup.get(row_id)
+                if row and row.order != index:
+                    row.order = index
+                    row.save(update_fields=['order'])
+            messages.success(request, _('Contest problem order has been updated.'))
+            if request.headers.get('x-requested-with') == 'XMLHttpRequest':
+                return JsonResponse({'ok': True})
+        elif action == 'remove_problem':
+            mapping_id = request.POST.get('mapping_id')
+            if mapping_id and mapping_id.isdigit():
+                deleted_count = ContestProblem.objects.filter(contest=self.object, id=int(mapping_id)).delete()[0]
+                if deleted_count:
+                    messages.success(request, _('Problem has been removed from this contest.'))
+                else:
+                    messages.warning(request, _('Problem mapping does not exist.'))
+
+        target = reverse('contest_view', args=(self.object.key,))
+        if action == 'reorder_problems' and request.POST.get('keep_edit_mode') == '1':
+            target = f'{target}?edit=1'
+        return redirect(target)
+
     def is_comment_locked(self):
         if self.object.use_clarifications:
             now = timezone.now()
@@ -282,19 +336,30 @@ class ContestDetail(ContestMixin, TitleMixin, CommentedDetailView):
 
     def get_context_data(self, **kwargs):
         context = super(ContestDetail, self).get_context_data(**kwargs)
-        context['contest_problems'] = Problem.objects.filter(contests__contest=self.object) \
+        context['contest_problems'] = list(Problem.objects.filter(contests__contest=self.object) \
             .order_by('contests__order').defer('description') \
             .annotate(has_public_editorial=Case(
                 When(solution__is_public=True, solution__publish_on__lte=timezone.now(), then=True),
                 default=False,
                 output_field=BooleanField(),
             )) \
-            .add_i18n_name(self.request.LANGUAGE_CODE)
+            .add_i18n_name(self.request.LANGUAGE_CODE))
 
         # convert to problem points in contest instead of actual points
         points_list = list(self.object.contest_problems.values_list('points').order_by('order'))
         for idx, p in enumerate(context['contest_problems']):
             p.points = points_list[idx][0]
+
+        contest_problem_rows = list(self.object.contest_problems.select_related('problem').order_by('order'))
+        context['contest_problem_rows'] = [
+            {
+                'mapping_id': row.id,
+                'problem': context['contest_problems'][index],
+                'order': row.order,
+                'points': row.points,
+            }
+            for index, row in enumerate(contest_problem_rows)
+        ]
 
         context['metadata'] = {
             'has_public_editorials': any(
@@ -328,6 +393,16 @@ class ContestDetail(ContestMixin, TitleMixin, CommentedDetailView):
         context['attempted_problem_ids'] = user_attempted_ids(self.request.profile) if authenticated else []
 
         context['can_download_data'] = bool(settings.DMOJ_CONTEST_DATA_DOWNLOAD)
+        context['can_manage_contest_problems'] = self.object.is_editable_by(self.request.user)
+        context['edit_mode_enabled'] = context['can_manage_contest_problems'] and self.request.GET.get('edit') == '1'
+        if context['can_manage_contest_problems']:
+            assigned_problem_ids = set(self.object.contest_problems.values_list('problem_id', flat=True))
+            available_problems = Problem.get_visible_problems(self.request.user).order_by('code')
+            if assigned_problem_ids:
+                available_problems = available_problems.exclude(id__in=assigned_problem_ids)
+            context['available_contest_problems'] = available_problems.values('id', 'code', 'name')[:200]
+        else:
+            context['available_contest_problems'] = []
 
         return context
 

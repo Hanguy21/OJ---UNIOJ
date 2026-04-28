@@ -14,6 +14,7 @@ from urllib.parse import parse_qs, urlparse
 import requests
 from django.conf import settings
 from django.core.files import File
+from django.core.files.base import ContentFile
 from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 from django.utils import timezone
@@ -122,9 +123,6 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         problem_ref = options["problem"].strip()
         problem_id = self._extract_problem_id(problem_ref)
-        if problem_id is None:
-            self.stdout.write(self.style.ERROR(f"Invalid Polygon problem input: {problem_ref}"))
-            raise CommandError(f"Cannot parse Polygon problem ID from: {problem_ref}")
 
         api_key = (options.get("api_key") or "").strip() or os.environ.get("POLYGON_API_KEY", "").strip()
         api_secret = (options.get("api_secret") or "").strip() or os.environ.get("POLYGON_API_SECRET", "").strip()
@@ -139,6 +137,16 @@ class Command(BaseCommand):
                 "Run: eval \"$(./scripts/export_polygon_api <api_key> <api_secret>)\""
             )
 
+        client = PolygonClient(api_key=api_key, api_secret=api_secret, base_url=base_url)
+        if problem_id is None:
+            problem_id = self._resolve_problem_id(client, problem_ref)
+        if problem_id is None:
+            self.stdout.write(self.style.ERROR(f"Invalid Polygon problem input: {problem_ref}"))
+            raise CommandError(
+                "Cannot resolve Polygon problem ID from input. "
+                "Please provide a numeric problem ID or a URL that can be resolved via Polygon API."
+            )
+
         polygon_root = Path(getattr(settings, 'POLYGON_PACKAGE_ROOT', '/polygon_package'))
         polygon_root.mkdir(parents=True, exist_ok=True)
         package_path = polygon_root / f"{problem_id}$linux.zip"
@@ -147,8 +155,6 @@ class Command(BaseCommand):
         self.stdout.write(f"Polygon problem_id: {problem_id}")
         self.stdout.write(f"DMOJ problem code: {problem_code}")
         self.stdout.write(f"Output package path: {package_path}")
-
-        client = PolygonClient(api_key=api_key, api_secret=api_secret, base_url=base_url)
         self._log_progress(3, "Validating Polygon API credentials and problem ID")
         try:
             owner_name, problem_name, exists = self._fetch_problem_identity(client, problem_id)
@@ -242,6 +248,54 @@ class Command(BaseCommand):
             match = re.search(pattern, problem_ref)
             if match:
                 return int(match.group(1))
+        return None
+
+    def _resolve_problem_id(self, client, problem_ref):
+        parsed = urlparse(problem_ref)
+        if not parsed.netloc:
+            return None
+
+        # Expected shared Polygon URL form:
+        # /<share-token>/<owner>/<problem-slug>
+        parts = [part for part in parsed.path.split('/') if part]
+        if len(parts) < 2:
+            return None
+        owner = parts[-2].strip()
+        slug = parts[-1].strip()
+        if not owner or not slug:
+            return None
+
+        # First try direct lookup by owner.
+        try:
+            result = client.call_json("problems.list", {"owner": owner, "showDeleted": True})
+        except CommandError:
+            result = []
+
+        if isinstance(result, list):
+            slug_lower = slug.lower()
+            for item in result:
+                if not isinstance(item, dict):
+                    continue
+                candidates = [
+                    item.get("shortName"),
+                    item.get("name"),
+                    item.get("url"),
+                    item.get("title"),
+                ]
+                for value in candidates:
+                    if not value:
+                        continue
+                    if str(value).strip().lower() == slug_lower:
+                        problem_id = item.get("id")
+                        if str(problem_id).isdigit():
+                            return int(problem_id)
+                    # Be tolerant with URLs/titles that may include separators.
+                    normalized = slugify(str(value)).replace("-", "").lower()
+                    if normalized and normalized == slugify(slug).replace("-", "").lower():
+                        problem_id = item.get("id")
+                        if str(problem_id).isdigit():
+                            return int(problem_id)
+
         return None
 
     def _fetch_tags(self, client, problem_id):
@@ -351,7 +405,9 @@ class Command(BaseCommand):
         try:
             payload = json.loads(raw_text)
         except json.JSONDecodeError:
-            return "Unexpected non-JSON response from Polygon", False
+            # Polygon/Cloudflare can intermittently return HTML pages while artifacts
+            # are propagating. Treat this as transient and keep polling.
+            return "Unexpected non-JSON response from Polygon", True
 
         status = payload.get("status")
         if status == "OK":
@@ -488,8 +544,14 @@ class Command(BaseCommand):
                 problem_data.checker_args = ""
 
             if "custom_checker" in problem_meta:
+                # Must not wrap a file handle that closes before model.save() reads it.
                 with open(problem_meta["custom_checker"], "rb") as checker_file:
-                    problem_data.custom_checker = File(checker_file)
+                    checker_bytes = checker_file.read()
+                problem_data.custom_checker.save(
+                    os.path.basename(problem_meta["custom_checker"]),
+                    ContentFile(checker_bytes),
+                    save=False,
+                )
             else:
                 if problem_data.custom_checker:
                     problem_data.custom_checker.delete(save=False)
@@ -497,7 +559,12 @@ class Command(BaseCommand):
 
             if "custom_grader" in problem_meta:
                 with open(problem_meta["custom_grader"], "rb") as grader_file:
-                    problem_data.custom_grader = File(grader_file)
+                    grader_bytes = grader_file.read()
+                problem_data.custom_grader.save(
+                    os.path.basename(problem_meta["custom_grader"]),
+                    ContentFile(grader_bytes),
+                    save=False,
+                )
             else:
                 if problem_data.custom_grader:
                     problem_data.custom_grader.delete(save=False)

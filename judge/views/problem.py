@@ -36,7 +36,8 @@ from django.views.generic.detail import SingleObjectMixin
 from reversion import revisions
 
 from judge.comments import CommentedDetailView
-from judge.forms import LanguageLimitFormSet, PolygonImportForm, ProblemCloneForm, ProblemCreateForm, ProblemEditForm, ProblemSubmitForm
+from judge.forms import LanguageLimitFormSet, PolygonImportForm, ProblemCloneForm, ProblemCreateForm, \
+    ProblemEditorialForm, ProblemEditForm, ProblemSubmitForm
 from judge.models import ContestSubmission, Judge, Language, Problem, ProblemGroup, \
     ProblemTranslation, ProblemType, RuntimeVersion, Solution, Submission, SubmissionSource
 from judge.models.problem import ProblemTestcaseAccess
@@ -125,6 +126,31 @@ class ProblemSolution(SolvedProblemMixin, ProblemMixin, TitleMixin, CommentedDet
             format_html('<a href="{1}">{0}</a>', self.object.name, reverse('problem_detail', args=[self.object.code])),
         ))
 
+    def _can_edit_editorial(self, user):
+        return user.is_authenticated and (
+            user.has_perm('judge.edit_problem_editorial') or self.object.is_editable_by(user)
+        )
+
+    def post(self, request, *args, **kwargs):
+        self.object = self.get_object()
+        solution = get_object_or_404(Solution, problem=self.object)
+        if not solution.is_accessible_by(request.user) or request.in_contest:
+            raise Http404()
+        if not self._can_edit_editorial(request.user):
+            return HttpResponseForbidden()
+
+        editorial_form = ProblemEditorialForm(request.POST)
+        if not editorial_form.is_valid():
+            messages.error(request, _('Editorial content is invalid.'))
+            return HttpResponseRedirect(reverse('problem_editorial', args=[self.object.code]))
+        editorial_content = (editorial_form.cleaned_data.get('editorial_content') or '').strip()
+        solution.content = editorial_content
+        solution.save(update_fields=['content'])
+        if request.user.is_authenticated:
+            solution.authors.add(request.user.profile)
+        messages.success(request, _('Editorial has been updated.'))
+        return HttpResponseRedirect(reverse('problem_editorial', args=[self.object.code]))
+
     def get_context_data(self, **kwargs):
         context = super(ProblemSolution, self).get_context_data(**kwargs)
 
@@ -133,8 +159,12 @@ class ProblemSolution(SolvedProblemMixin, ProblemMixin, TitleMixin, CommentedDet
         if not solution.is_accessible_by(self.request.user) or self.request.in_contest:
             raise Http404()
         context['solution'] = solution
-        context['solution_content'] = solution.get_content_text()
+        # Editorial page must render editorial text only.
+        # Official solution code is stored separately and must not be exposed here.
+        context['solution_content'] = (solution.content or '').strip()
         context['has_solved_problem'] = self.object.id in self.get_completed_problems()
+        context['can_edit_editorial'] = self._can_edit_editorial(self.request.user)
+        context['editorial_form'] = ProblemEditorialForm(initial={'editorial_content': context['solution_content']})
         return context
 
     def get_comment_page(self):
@@ -924,14 +954,17 @@ class ProblemCreate(PermissionRequiredMixin, TitleMixin, CreateView):
         return HttpResponseRedirect(self.get_success_url())
 
     def save_solution(self, form, problem):
+        publish_on = form.cleaned_data.get('solution_publish_on')
         solution = Solution.objects.create(
             problem=problem,
-            is_public=False,
-            publish_on=timezone.now(),
+            is_public=bool(form.cleaned_data.get('solution_is_public')),
+            publish_on=timezone.make_aware(
+                timezone.datetime.combine(publish_on, timezone.datetime.min.time())
+            ) if publish_on else timezone.now(),
             solution_language_key=form.cleaned_data['solution_language'].key,
-            content='',
+            content=(form.cleaned_data.get('editorial_content') or '').strip(),
         )
-        solution.save_content_text(form.cleaned_data['solution_content'])
+        solution.save_content_text((form.cleaned_data.get('solution_content') or '').strip())
         solution.authors.add(self.request.user.profile)
 
     def get_initial(self):
@@ -1369,19 +1402,25 @@ class ProblemEdit(ProblemMixin, TitleMixin, UpdateView):
         return self.render_to_response(self.get_context_data(object=self.object))
 
     def save_solution(self, form, problem):
+        editorial_content = (form.cleaned_data.get('editorial_content') or '').strip()
         solution_content = (form.cleaned_data.get('solution_content') or '').strip()
-        if solution_content:
+        publish_on = form.cleaned_data.get('solution_publish_on')
+        if solution_content or editorial_content:
             solution, created = Solution.objects.update_or_create(
                 problem=problem,
                 defaults={
-                    'is_public': False,
-                    'publish_on': timezone.now(),
+                    'is_public': bool(form.cleaned_data.get('solution_is_public')),
+                    'publish_on': timezone.make_aware(
+                        timezone.datetime.combine(publish_on, timezone.datetime.min.time())
+                    ) if publish_on else timezone.now(),
                     'solution_language_key': form.cleaned_data['solution_language'].key,
-                    'content': '',
+                    'content': editorial_content,
                 },
             )
             solution.save_content_text(solution_content)
             if created:
+                solution.authors.add(self.request.user.profile)
+            elif self.request.user.is_authenticated:
                 solution.authors.add(self.request.user.profile)
         else:
             try:

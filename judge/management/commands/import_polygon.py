@@ -507,29 +507,25 @@ class Command(BaseCommand):
                 description=tran["description"],
             )
 
-        solution_content = ""
-        model_solution_code = (problem_meta.get("model_solution_code") or "").strip()
-        if model_solution_code:
-            solution_content = "```cpp\n" + model_solution_code + "\n```"
-        else:
-            tutorial = (problem_meta.get("tutorial") or "").strip()
-            if tutorial:
-                solution_content = tutorial
+        # Keep editorial/tutorial and official solution source code separated.
+        editorial_content = (problem_meta.get("tutorial") or "").strip()
+        official_solution_code = (problem_meta.get("model_solution_code") or "").strip()
 
-        if solution_content:
+        if editorial_content or official_solution_code:
             solution, _ = Solution.objects.update_or_create(
                 problem=problem,
                 defaults={
                     "is_public": False,
-                    "content": "",
+                    "content": editorial_content,
                     "publish_on": timezone.now(),
                     "solution_language_key": "CPP17",
                 },
             )
-            solution.save_content_text(solution_content)
+            if official_solution_code:
+                solution.save_content_text(official_solution_code)
             solution.authors.set(problem_meta["authors"])
         elif Solution.objects.filter(problem=problem).exists():
-            self.stdout.write("No reference solution source found in Polygon package; keeping existing solution.")
+            self.stdout.write("No editorial/solution update found in Polygon package; keeping existing solution data.")
 
         with open(problem_meta["zipfile"], "rb") as f:
             problem_data, _ = ProblemData.objects.get_or_create(problem=problem)

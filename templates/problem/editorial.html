@@ -1,17 +1,28 @@
 {% extends "common-content.html" %}
 
 {% block content_js_media %}
+    {% if can_edit_editorial and editorial_form %}
+        {{ editorial_form.media.js }}
+    {% endif %}
     {% include "comments/media-js.html" %}
 {% endblock %}
 
 {% block content_media %}
+    {% if can_edit_editorial and editorial_form %}
+        {{ editorial_form.media.css }}
+    {% endif %}
     {% include "comments/media-css.html" %}
 {% endblock %}
 
 {% block header %}
     <div style="float:right">
+        {% if can_edit_editorial %}
+            <button id="editorial-edit-toggle" type="button" class="button button-ghost" style="margin-right: 6px;">
+                {{ _('Edit mode') }}
+            </button>
+        {% endif %}
         {% if problem.is_editable_by(request.user) %}
-            [<a href="{{ url('admin:judge_problem_change', problem.id) }}">{{ _('Edit') }}</a>]
+            [<a href="{{ url('admin:judge_problem_change', problem.id) }}">{{ _('Admin') }}</a>]
         {% endif %}
     </div>
 {% endblock %}
@@ -36,13 +47,51 @@
                 </p>
             {% endif %}
         {% endwith %}
-        {{ solution_content|markdown('solution', MATH_ENGINE)|reference|str|safe }}
+        <div class="editorial-read-view">
+            {{ solution_content|markdown('solution', MATH_ENGINE)|reference|str|safe }}
+        </div>
+        {% if can_edit_editorial %}
+            <form method="post" class="editorial-edit-form" style="display:none; margin-top: 12px;">
+                {% csrf_token %}
+                {{ editorial_form.editorial_content.label_tag() }}
+                {{ editorial_form.editorial_content }}
+                <div style="margin-top:8px; display:flex; gap:8px;">
+                    <button type="submit" class="button">{{ _('Save editorial') }}</button>
+                    <button type="button" id="editorial-edit-cancel" class="button button-ghost">{{ _('Cancel') }}</button>
+                </div>
+            </form>
+        {% endif %}
     </div>
     <hr>
     {% include "comments/list.html" %}
 {% endblock %}
 
 {% block bodyend %}
+    {% if can_edit_editorial %}
+        <script>
+            (function () {
+                var toggleBtn = document.getElementById('editorial-edit-toggle');
+                var cancelBtn = document.getElementById('editorial-edit-cancel');
+                var readView = document.querySelector('.editorial-read-view');
+                var editForm = document.querySelector('.editorial-edit-form');
+                if (!toggleBtn || !readView || !editForm) return;
+
+                function setEditMode(enabled) {
+                    readView.style.display = enabled ? 'none' : '';
+                    editForm.style.display = enabled ? '' : 'none';
+                }
+
+                toggleBtn.addEventListener('click', function () {
+                    setEditMode(editForm.style.display === 'none' || !editForm.style.display);
+                });
+                if (cancelBtn) {
+                    cancelBtn.addEventListener('click', function () {
+                        setEditMode(false);
+                    });
+                }
+            })();
+        </script>
+    {% endif %}
     {% if REQUIRE_JAX %}
         {% include "mathjax-load.html" %}
     {% endif %}

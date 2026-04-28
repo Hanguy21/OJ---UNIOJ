@@ -10,7 +10,7 @@ from django.utils.html import format_html
 from django.utils.translation import gettext, gettext_lazy as _, ngettext
 from reversion.admin import VersionAdmin
 
-from judge.models import LanguageLimit, Problem, ProblemClarification, ProblemTranslation, Profile, Solution
+from judge.models import Language, LanguageLimit, Problem, ProblemClarification, ProblemTranslation, Profile, Solution
 from judge.utils.views import NoBatchDeleteMixin
 from judge.widgets import AdminHeavySelect2MultipleWidget, AdminHeavySelect2Widget, AdminMartorWidget, \
     AdminSelect2MultipleWidget, AdminSelect2Widget, CheckboxSelectMultipleWithSelectAll
@@ -83,9 +83,70 @@ class ProblemClarificationInline(admin.StackedInline):
 
 
 class ProblemSolutionForm(ModelForm):
+    solution_code = forms.CharField(
+        required=False,
+        label=_('Solutions code'),
+        widget=forms.Textarea(attrs={'rows': 16, 'style': 'width: 100%; font-family: monospace;'}),
+        help_text=_('Official solution source code used for quick submit and internal tooling.'),
+    )
+    solution_language = forms.ModelChoiceField(
+        queryset=Language.objects.none(),
+        required=False,
+        label=_('Solution language'),
+        widget=AdminSelect2Widget(),
+    )
+    solution_file = forms.FileField(
+        required=False,
+        label=_('Solution code file'),
+        help_text=_('Optional. Upload a UTF-8 text file to auto-fill solutions code.'),
+    )
+
     def __init__(self, *args, **kwargs):
         super(ProblemSolutionForm, self).__init__(*args, **kwargs)
         self.fields['authors'].widget.can_add_related = False
+        self.fields['solution_language'].queryset = Language.objects.order_by('name')
+        if self.instance and self.instance.pk:
+            self.initial['solution_code'] = self.instance.get_source_code_text()
+            self.initial['solution_language'] = (
+                self.fields['solution_language'].queryset.filter(key=self.instance.solution_language_key).first()
+            )
+
+    def clean(self):
+        cleaned_data = super(ProblemSolutionForm, self).clean()
+        solution_code = (cleaned_data.get('solution_code') or '').strip()
+        solution_file = self.files.get(self.add_prefix('solution_file'))
+        if solution_file and not solution_code:
+            try:
+                solution_code = solution_file.read().decode('utf-8')
+            except UnicodeDecodeError:
+                raise forms.ValidationError(_('Solution file must be UTF-8 text.'))
+            cleaned_data['solution_code'] = solution_code.strip()
+            solution_file.seek(0)
+        if not cleaned_data.get('solution_language'):
+            cleaned_data['solution_language'] = (
+                self.fields['solution_language'].queryset.filter(key='CPP17').first()
+                or self.fields['solution_language'].queryset.first()
+            )
+        return cleaned_data
+
+    def save(self, commit=True):
+        instance = super(ProblemSolutionForm, self).save(commit=commit)
+        if not commit:
+            return instance
+
+        lang = self.cleaned_data.get('solution_language')
+        if lang:
+            instance.solution_language_key = lang.key
+            instance.save(update_fields=['solution_language_key'])
+
+        if any(field in self.changed_data for field in ('solution_code', 'solution_file', 'solution_language')):
+            code = (self.cleaned_data.get('solution_code') or '').strip()
+            if code:
+                instance.save_content_text(code)
+            else:
+                instance.delete_content_file()
+
+        return instance
 
     class Meta:
         widgets = {
@@ -96,7 +157,7 @@ class ProblemSolutionForm(ModelForm):
 
 class ProblemSolutionInline(admin.StackedInline):
     model = Solution
-    fields = ('is_public', 'publish_on', 'authors', 'content')
+    fields = ('is_public', 'publish_on', 'authors', 'content', 'solution_language', 'solution_code', 'solution_file')
     form = ProblemSolutionForm
     extra = 0
 

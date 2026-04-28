@@ -703,23 +703,21 @@ def create_problem(problem_meta):
             description=tran['description'],
         ).save()
 
-    solution_content = ''
-    model_solution_code = (problem_meta.get('model_solution_code') or '').strip()
-    if model_solution_code:
-        solution_content = '```cpp\n' + model_solution_code + '\n```'
-    elif problem_meta['tutorial'] != '':
-        solution_content = problem_meta['tutorial']
+    # Keep editorial/tutorial and official solution source code separated.
+    editorial_content = (problem_meta.get('tutorial') or '').strip()
+    official_solution_code = (problem_meta.get('model_solution_code') or '').strip()
 
-    if solution_content:
+    if editorial_content or official_solution_code:
         solution = Solution(
             problem=problem,
             is_public=False,
             publish_on=timezone.now(),
             solution_language_key='CPP17',
-            content='',
+            content=editorial_content,
         )
         solution.save()
-        solution.save_content_text(solution_content)
+        if official_solution_code:
+            solution.save_content_text(official_solution_code)
         solution.authors.set(problem_meta['authors'])
 
     with open(problem_meta['zipfile'], 'rb') as f:

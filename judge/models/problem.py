@@ -682,6 +682,9 @@ class Solution(models.Model):
     def _content_file_path_for_extension(self, extension):
         return os.path.join(self.problem.code, 'solutions', 'official_solution.%s' % extension)
 
+    def editorial_file_path(self):
+        return os.path.join(self.problem.code, 'solutions', 'editorial.md')
+
     def content_file_path(self):
         # Keep official solution source near problem test data for easier backup.
         return self._content_file_path_for_extension(self._language_extension())
@@ -706,6 +709,16 @@ class Solution(models.Model):
             pass
         return self.content or ''
 
+    def get_source_code_text(self):
+        try:
+            for path in self._candidate_content_file_paths():
+                if problem_data_storage.exists(path):
+                    with problem_data_storage.open(path, 'rb') as f:
+                        return f.read().decode('utf-8')
+        except Exception:
+            pass
+        return ''
+
     def save_content_text(self, text):
         path = self.content_file_path()
         for existing_path in self._candidate_content_file_paths():
@@ -713,15 +726,26 @@ class Solution(models.Model):
                 problem_data_storage.delete(existing_path)
         problem_data_storage.save(path, ContentFile(text or ''))
 
-        # Keep DB column empty to avoid storing large solution source in DB.
-        if self.content:
-            self.content = ''
-            self.save(update_fields=['content'])
+    def sync_editorial_markdown_file(self):
+        path = self.editorial_file_path()
+        editorial_text = (self.content or '').strip()
+        if editorial_text:
+            if problem_data_storage.exists(path):
+                problem_data_storage.delete(path)
+            problem_data_storage.save(path, ContentFile(editorial_text))
+        elif problem_data_storage.exists(path):
+            problem_data_storage.delete(path)
 
     def delete_content_file(self):
         for path in self._candidate_content_file_paths():
             if problem_data_storage.exists(path):
                 problem_data_storage.delete(path)
+
+    def save(self, *args, **kwargs):
+        result = super().save(*args, **kwargs)
+        # Keep a markdown editorial snapshot beside official solution files.
+        self.sync_editorial_markdown_file()
+        return result
 
     def get_absolute_url(self):
         problem = self.problem
@@ -745,6 +769,7 @@ class Solution(models.Model):
     class Meta:
         permissions = (
             ('see_private_solution', _('See hidden solutions')),
+            ('edit_problem_editorial', _('Edit problem editorial content')),
         )
         verbose_name = _('solution')
         verbose_name_plural = _('solutions')

@@ -202,6 +202,14 @@ class ProposeProblemSolutionForm(ModelForm):
         return cleaned_data
 
 
+class ProblemEditorialForm(Form):
+    editorial_content = CharField(
+        required=False,
+        label=_('Editorial (Markdown)'),
+        widget=MartorWidget(attrs={'data-markdownfy-url': reverse_lazy('solution_preview')}),
+    )
+
+
 class LanguageLimitForm(ModelForm):
     def __init__(self, *args, **kwargs):
         self.user = kwargs.pop('user', None)
@@ -232,9 +240,25 @@ class ProblemEditForm(ModelForm):
         widget=forms.FileInput(attrs={'accept': 'application/pdf'}),
         label=_('Statement file'),
     )
+    editorial_content = CharField(
+        required=False,
+        label=_('Editorial'),
+        widget=MartorWidget(attrs={'data-markdownfy-url': reverse_lazy('solution_preview')}),
+        help_text=_('Write explanation/tutorial for solving this problem.'),
+    )
+    solution_is_public = BooleanField(
+        required=False,
+        label=_('Public visibility'),
+        help_text=_('If enabled, editorial is visible to users after publish time.'),
+    )
+    solution_publish_on = forms.DateField(
+        required=False,
+        label=_('Editorial publish date'),
+        widget=DateInput(attrs={'type': 'date'}),
+    )
     solution_content = CharField(
         required=False,
-        label=_('Solution'),
+        label=_('Official solution code'),
         widget=AceWidget(mode='c_cpp', theme='textmate', height='360px'),
         help_text=_('Official solution source code.'),
     )
@@ -275,18 +299,38 @@ class ProblemEditForm(ModelForm):
             if allowed.exists():
                 self.fields['solution_language'].queryset = allowed
 
-        field_order = [key for key in self.fields.keys() if key not in ('solution_language', 'solution_content', 'solution_file')]
+        field_order = [
+            key for key in self.fields.keys()
+            if key not in (
+                'editorial_content',
+                'solution_is_public',
+                'solution_publish_on',
+                'solution_language',
+                'solution_content',
+                'solution_file',
+            )
+        ]
         if 'description' in field_order:
             insert_at = field_order.index('description') + 1
         else:
             insert_at = len(field_order)
-        field_order[insert_at:insert_at] = ['solution_language', 'solution_content', 'solution_file']
+        field_order[insert_at:insert_at] = [
+            'editorial_content',
+            'solution_is_public',
+            'solution_publish_on',
+            'solution_language',
+            'solution_content',
+            'solution_file',
+        ]
         self.order_fields(field_order)
         if getattr(self.instance, 'pk', None):
             try:
                 solution_content = self.instance.solution.get_content_text() or ''
                 fence_match = re.fullmatch(r'```[^\n]*\n([\s\S]*?)\n```', solution_content.strip())
                 self.initial['solution_content'] = fence_match.group(1) if fence_match else solution_content
+                self.initial['editorial_content'] = self.instance.solution.content or ''
+                self.initial['solution_is_public'] = bool(self.instance.solution.is_public)
+                self.initial['solution_publish_on'] = self.instance.solution.publish_on.date() if self.instance.solution.publish_on else None
                 self.initial['solution_language'] = (
                     Language.objects.filter(key=self.instance.solution.solution_language_key).first()
                     or Language.objects.filter(key='CPP17').first()
@@ -294,10 +338,16 @@ class ProblemEditForm(ModelForm):
                 )
             except Solution.DoesNotExist:
                 self.initial['solution_content'] = ''
+                self.initial['editorial_content'] = ''
+                self.initial['solution_is_public'] = False
+                self.initial['solution_publish_on'] = None
                 self.initial['solution_language'] = (
                     Language.objects.filter(key='CPP17').first() or Language.get_default_language()
                 )
         else:
+            self.initial['editorial_content'] = ''
+            self.initial['solution_is_public'] = False
+            self.initial['solution_publish_on'] = None
             self.initial['solution_language'] = (
                 Language.objects.filter(key='CPP17').first() or Language.get_default_language()
             )
@@ -397,8 +447,8 @@ class ProblemEditForm(ModelForm):
 class ProblemCreateForm(ProblemEditForm):
     def clean(self):
         cleaned_data = super(ProblemCreateForm, self).clean()
-        if not cleaned_data.get('solution_content'):
-            raise forms.ValidationError(_('Please provide a solution (text or file).'))
+        if not cleaned_data.get('editorial_content') and not cleaned_data.get('solution_content'):
+            raise forms.ValidationError(_('Please provide editorial content or official solution code.'))
         return cleaned_data
 
 

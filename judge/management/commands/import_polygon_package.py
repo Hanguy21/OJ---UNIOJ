@@ -710,7 +710,7 @@ def create_problem(problem_meta):
     if editorial_content or official_solution_code:
         solution = Solution(
             problem=problem,
-            is_public=False,
+            is_public=True,
             publish_on=timezone.now(),
             solution_language_key='CPP17',
             content=editorial_content,

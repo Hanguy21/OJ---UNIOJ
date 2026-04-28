@@ -339,14 +339,14 @@ class ProblemEditForm(ModelForm):
             except Solution.DoesNotExist:
                 self.initial['solution_content'] = ''
                 self.initial['editorial_content'] = ''
-                self.initial['solution_is_public'] = False
+                self.initial['solution_is_public'] = True
                 self.initial['solution_publish_on'] = None
                 self.initial['solution_language'] = (
                     Language.objects.filter(key='CPP17').first() or Language.get_default_language()
                 )
         else:
             self.initial['editorial_content'] = ''
-            self.initial['solution_is_public'] = False
+            self.initial['solution_is_public'] = True
             self.initial['solution_publish_on'] = None
             self.initial['solution_language'] = (
                 Language.objects.filter(key='CPP17').first() or Language.get_default_language()

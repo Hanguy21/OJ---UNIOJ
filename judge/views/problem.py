@@ -156,7 +156,8 @@ class ProblemSolution(SolvedProblemMixin, ProblemMixin, TitleMixin, CommentedDet
 
         solution = get_object_or_404(Solution, problem=self.object)
 
-        if not solution.is_accessible_by(self.request.user) or self.request.in_contest:
+        blocked_in_contest = self.request.in_contest and not self.request.user.has_perm('judge.see_private_solution')
+        if not solution.is_accessible_by(self.request.user) or blocked_in_contest:
             raise Http404()
         context['solution'] = solution
         # Editorial page must render editorial text only.
@@ -440,6 +441,16 @@ class ProblemList(QueryStringSortMixin, TitleMixin, SolvedProblemMixin, ListView
             queryset = queryset.prefetch_related('types')
         queryset = queryset.annotate(has_public_editorial=Case(
             When(solution__is_public=True, solution__publish_on__lte=timezone.now(), then=True),
+            default=False,
+            output_field=BooleanField(),
+        ))
+        queryset = queryset.annotate(has_empty_public_editorial=Case(
+            When(
+                solution__is_public=True,
+                solution__publish_on__lte=timezone.now(),
+                solution__content='',
+                then=True,
+            ),
             default=False,
             output_field=BooleanField(),
         ))

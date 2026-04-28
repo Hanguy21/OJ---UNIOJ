@@ -239,7 +239,7 @@
                         <td>
                             {% if problem.has_public_editorial %}
                                 <a href="{{ url('problem_editorial', problem.code) }}">
-                                    <i class="has-editorial-color fa fa-check-circle"></i>
+                                    <i class="{% if problem.has_empty_public_editorial %}empty-editorial-color{% else %}has-editorial-color{% endif %} fa fa-check-circle"></i>
                                 </a>
                             {% else %}
                                 <i class="no-editorial-color fa fa-minus-circle"></i>

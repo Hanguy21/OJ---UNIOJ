@@ -515,7 +515,7 @@ class Command(BaseCommand):
             solution, _ = Solution.objects.update_or_create(
                 problem=problem,
                 defaults={
-                    "is_public": False,
+                    "is_public": True,
                     "content": editorial_content,
                     "publish_on": timezone.now(),
                     "solution_language_key": "CPP17",

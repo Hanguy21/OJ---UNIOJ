@@ -29,10 +29,12 @@ from judge.utils.problem_data import ProblemDataCompiler
 
 
 class PolygonClient:
-    def __init__(self, api_key, api_secret, base_url):
+    def __init__(self, api_key, api_secret, base_url, max_retries=3, retry_delay=2):
         self.api_key = api_key
         self.api_secret = api_secret
         self.base_url = base_url.rstrip("/") + "/"
+        self.max_retries = max(1, int(max_retries or 1))
+        self.retry_delay = max(0, int(retry_delay or 0))
         self.session = requests.Session()
 
     @staticmethod
@@ -69,21 +71,50 @@ class PolygonClient:
         return encoded
 
     def call_json(self, method, params):
-        resp = self.session.post(self.base_url + method, files=self._signed_payload(method, params), timeout=60)
-        if resp.status_code not in (200, 400):
-            raise CommandError(f"Polygon API returned HTTP {resp.status_code} for {method}")
-        try:
-            data = resp.json()
-        except json.JSONDecodeError as exc:
-            raise CommandError(f"Polygon API returned invalid JSON for {method}") from exc
-        status = data.get("status")
-        if status != "OK":
+        last_error = None
+        for attempt in range(1, self.max_retries + 1):
+            resp = self.session.post(self.base_url + method, files=self._signed_payload(method, params), timeout=60)
+            if resp.status_code not in (200, 400):
+                last_error = f"Polygon API returned HTTP {resp.status_code} for {method}"
+                if self._is_retryable_http(resp.status_code) and attempt < self.max_retries:
+                    time.sleep(self.retry_delay)
+                    continue
+                raise CommandError(last_error)
+            try:
+                data = resp.json()
+            except json.JSONDecodeError as exc:
+                raise CommandError(f"Polygon API returned invalid JSON for {method}") from exc
+            status = data.get("status")
+            if status == "OK":
+                return data.get("result")
+
             comment = data.get("comment", "Unknown Polygon API error")
-            raise CommandError(f"{method} failed: {comment}")
-        return data.get("result")
+            last_error = f"{method} failed: {comment}"
+            if self._is_retryable_polygon_error(comment) and attempt < self.max_retries:
+                time.sleep(self.retry_delay)
+                continue
+            raise CommandError(last_error)
+
+        raise CommandError(last_error or f"{method} failed")
 
     def call_raw(self, method, params):
         return self.session.post(self.base_url + method, files=self._signed_payload(method, params), timeout=120)
+
+    @staticmethod
+    def _is_retryable_http(status_code):
+        return status_code in (408, 425, 429, 500, 502, 503, 504)
+
+    @staticmethod
+    def _is_retryable_polygon_error(message):
+        lowered = (message or "").lower()
+        return any(marker in lowered for marker in (
+            "too many requests",
+            "rate limit",
+            "temporarily",
+            "try again",
+            "timeout",
+            "internal error",
+        ))
 
 
 class Command(BaseCommand):
@@ -99,6 +130,7 @@ class Command(BaseCommand):
         parser.add_argument("--timeout", type=int, default=600, help="Package build timeout in seconds")
         parser.add_argument("--poll-interval", type=int, default=5, help="Polling interval in seconds")
         parser.add_argument("--verify-build", action="store_true", help="Enable Polygon verify when building package")
+        parser.add_argument("--non-interactive", action="store_true", help="Use deterministic defaults for import prompts")
 
     def _log_progress(self, percent, message):
         self.stdout.write(f"[{int(percent)}%] {message}")
@@ -206,6 +238,7 @@ class Command(BaseCommand):
                 problem_code=problem_code,
                 authors=options["authors"],
                 curators=options["curators"],
+                non_interactive=options["non_interactive"],
             )
         else:
             self.stdout.write("Problem already exists. Updating existing problem data...")
@@ -216,6 +249,7 @@ class Command(BaseCommand):
                 problem_code=problem_code,
                 authors=options["authors"],
                 curators=options["curators"],
+                non_interactive=options["non_interactive"],
             )
 
         if tags:
@@ -434,7 +468,7 @@ class Command(BaseCommand):
             return comment, False
         return comment, True
 
-    def _import_new_problem(self, package_path, problem_code, authors, curators):
+    def _import_new_problem(self, package_path, problem_code, authors, curators, non_interactive=False):
         from django.core.management import call_command
 
         call_command(
@@ -443,6 +477,7 @@ class Command(BaseCommand):
             problem_code,
             authors=authors,
             curators=curators,
+            non_interactive=non_interactive,
         )
 
     def _resolve_profiles(self, usernames):
@@ -455,33 +490,35 @@ class Command(BaseCommand):
         return profiles
 
     @transaction.atomic
-    def _update_existing_problem(self, existing_problem, package_path, problem_code, authors, curators):
+    def _update_existing_problem(self, existing_problem, package_path, problem_code, authors, curators,
+                                 non_interactive=False):
         if not shutil.which("pandoc"):
             raise CommandError("pandoc not installed")
         if polygon_import.pandoc_get_version() < (3, 0, 0):
             raise CommandError("pandoc version must be at least 3.0.0")
 
-        package = zipfile.ZipFile(str(package_path), "r")
-        if "problem.xml" not in package.namelist():
-            raise CommandError("problem.xml not found")
-        root = ET.fromstring(package.read("problem.xml"))
+        with zipfile.ZipFile(str(package_path), "r") as package:
+            if "problem.xml" not in package.namelist():
+                raise CommandError("problem.xml not found")
+            root = ET.fromstring(package.read("problem.xml"))
 
-        problem_meta = {
-            "image_cache": {},
-            "code": problem_code,
-            "tmp_dir": tempfile.TemporaryDirectory(),
-            "authors": self._resolve_profiles(authors) if authors else list(existing_problem.authors.all()),
-            "curators": self._resolve_profiles(curators) if curators else list(existing_problem.curators.all()),
-        }
+            problem_meta = {
+                "image_cache": {},
+                "code": problem_code,
+                "tmp_dir": tempfile.TemporaryDirectory(),
+                "authors": self._resolve_profiles(authors) if authors else list(existing_problem.authors.all()),
+                "curators": self._resolve_profiles(curators) if curators else list(existing_problem.curators.all()),
+                "non_interactive": non_interactive,
+            }
 
-        try:
-            polygon_import.parse_assets(problem_meta, root, package)
-            polygon_import.parse_tests(problem_meta, root, package)
-            polygon_import.parse_statements(problem_meta, root, package)
-            polygon_import.parse_reference_solution(problem_meta, package)
-            self._apply_problem_update(existing_problem, problem_meta)
-        finally:
-            problem_meta["tmp_dir"].cleanup()
+            try:
+                polygon_import.parse_assets(problem_meta, root, package)
+                polygon_import.parse_tests(problem_meta, root, package)
+                polygon_import.parse_statements(problem_meta, root, package)
+                polygon_import.parse_reference_solution(problem_meta, package)
+                self._apply_problem_update(existing_problem, problem_meta)
+            finally:
+                problem_meta["tmp_dir"].cleanup()
 
     def _apply_problem_update(self, problem, problem_meta):
         problem.name = problem_meta["name"]
@@ -606,8 +643,13 @@ class Command(BaseCommand):
             problem=problem,
             data=problem.data_files,
             cases=problem.cases.order_by("order"),
-            files=zipfile.ZipFile(problem_meta["zipfile"]).namelist(),
+            files=self._zip_names(problem_meta["zipfile"]),
         )
+
+    @staticmethod
+    def _zip_names(path):
+        with zipfile.ZipFile(path) as archive:
+            return archive.namelist()
 
     def _apply_tags_to_problem_types(self, problem_code, tags):
         problem = Problem.objects.get(code=problem_code)

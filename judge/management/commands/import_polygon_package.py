@@ -472,8 +472,13 @@ def parse_tests(problem_meta, root, package):
     zero_point_batches = [name for name, batch in problem_meta['batches'].items() if batch['points'] == 0]
     if len(zero_point_batches) > 0:
         print('Found zero-point batches:', ', '.join(zero_point_batches))
-        print('Would you like ignore them (y/n)? ', end='', flush=True)
-        if input().lower() in ['y', 'yes']:
+        if problem_meta.get('non_interactive'):
+            ignore_zero_point_batches = True
+            print('Non-interactive import: ignore zero-point batches')
+        else:
+            print('Would you like ignore them (y/n)? ', end='', flush=True)
+            ignore_zero_point_batches = input().lower() in ['y', 'yes']
+        if ignore_zero_point_batches:
             problem_meta['batches'] = {
                 name: batch for name, batch in problem_meta['batches'].items() if batch['points'] > 0
             }
@@ -591,6 +596,18 @@ def parse_statements(problem_meta, root, package):
         return description
 
     def input_choice(prompt, choices):
+        if problem_meta.get('non_interactive'):
+            preferred = getattr(settings, 'LANGUAGE_CODE', 'en')
+            if preferred in choices:
+                print(f'{prompt}{preferred} (non-interactive default)')
+                return preferred
+            if 'en' in choices:
+                print(f'{prompt}en (non-interactive default)')
+                return 'en'
+            choice = choices[0]
+            print(f'{prompt}{choice} (non-interactive default)')
+            return choice
+
         while True:
             choice = input(prompt)
             if choice in choices:
@@ -600,6 +617,10 @@ def parse_statements(problem_meta, root, package):
 
     statements = root.findall('.//statement[@type="application/x-tex"]')
     if len(statements) == 0:
+        if problem_meta.get('non_interactive'):
+            print('Statement not found. Non-interactive import: skip statement')
+            return
+
         print('Statement not found! Would you like to skip statement (y/n)? ', end='', flush=True)
         if input().lower() in ['y', 'yes']:
             return
@@ -636,15 +657,24 @@ def parse_statements(problem_meta, root, package):
     if len(translations) > 1:
         languages = [t['language'] for t in translations]
         print('Multilingual statements found:', languages)
-        main_language = input_choice('Please select one as the main statement: ', languages)
+        if problem_meta.get('non_interactive'):
+            preferred_languages = [getattr(settings, 'LANGUAGE_CODE', 'en'), 'en']
+            main_language = next((language for language in preferred_languages if language in languages), languages[0])
+            print(f'Use {main_language} as main statement (non-interactive default)')
+        else:
+            main_language = input_choice('Please select one as the main statement: ', languages)
     else:
         main_language = translations[0]['language']
 
     if len(tutorials) > 1:
         languages = [t['language'] for t in tutorials]
         print('Multilingual tutorials found:', languages)
-        main_language = input_choice('Please select one as the sole tutorial: ', languages)
-        problem_meta['tutorial'] = next(t for t in tutorials if t['language'] == main_language)['tutorial']
+        tutorial_language = main_language if main_language in languages else None
+        if tutorial_language is None:
+            tutorial_language = input_choice('Please select one as the sole tutorial: ', languages)
+        elif problem_meta.get('non_interactive'):
+            print(f'Use {tutorial_language} as sole tutorial (non-interactive default)')
+        problem_meta['tutorial'] = next(t for t in tutorials if t['language'] == tutorial_language)['tutorial']
     elif len(tutorials) > 0:
         problem_meta['tutorial'] = tutorials[0]['tutorial']
 
@@ -662,11 +692,18 @@ def parse_statements(problem_meta, root, package):
             problem_meta['description'] = description
         else:
             choices = list(map(itemgetter(0), settings.LANGUAGES))
-            site_language = input_choice(
-                f'Please select corresponding site language for {language} '
-                f'(available options are {", ".join(choices)}): ',
-                choices,
-            )
+            if problem_meta.get('non_interactive') and language in choices:
+                site_language = language
+                print(f'Map Polygon language {language} to site language {site_language} (non-interactive default)')
+            elif problem_meta.get('non_interactive'):
+                print(f'Skip Polygon translation {language}: no matching site language (non-interactive default)')
+                continue
+            else:
+                site_language = input_choice(
+                    f'Please select corresponding site language for {language} '
+                    f'(available options are {", ".join(choices)}): ',
+                    choices,
+                )
             problem_meta['translations'].append({
                 'language': site_language,
                 'name': name,
@@ -802,6 +839,7 @@ class Command(BaseCommand):
         parser.add_argument('code', help='problem code')
         parser.add_argument('--authors', help='username of problem author', nargs='*')
         parser.add_argument('--curators', help='username of problem curator', nargs='*')
+        parser.add_argument('--non-interactive', action='store_true', help='Use deterministic defaults for prompts')
 
     def handle(self, *args, **options):
         # Force using English
@@ -854,6 +892,7 @@ class Command(BaseCommand):
         problem_meta['tmp_dir'] = tempfile.TemporaryDirectory()
         problem_meta['authors'] = problem_authors
         problem_meta['curators'] = problem_curators
+        problem_meta['non_interactive'] = options['non_interactive']
 
         try:
             parse_assets(problem_meta, root, package)
@@ -864,8 +903,12 @@ class Command(BaseCommand):
         except Exception:
             # Remove imported images
             for image_url in problem_meta['image_cache'].values():
-                path = default_storage.path(os.path.join(settings.MARTOR_UPLOAD_MEDIA_DIR, os.path.basename(image_url)))
-                os.remove(path)
+                storage_name = os.path.join(settings.MARTOR_UPLOAD_MEDIA_DIR, os.path.basename(image_url))
+                path = default_storage.path(storage_name)
+                if default_storage.exists(storage_name):
+                    default_storage.delete(storage_name)
+                elif os.path.exists(path):
+                    os.remove(path)
 
             raise
         finally:

@@ -4,6 +4,7 @@ import os
 import random
 import re
 import shutil
+import socket
 import string
 import tempfile
 import time
@@ -12,6 +13,20 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 import requests
+
+
+def _urllib3_force_ipv4() -> None:
+    """Docker/WSL often advertises IPv6 without a usable default route; AAAA-first can yield errno 101."""
+    try:
+        from urllib3.util import connection as urllib3_connection
+    except ImportError:
+        return
+    if not hasattr(urllib3_connection, "allowed_gai_family"):
+        return
+    urllib3_connection.allowed_gai_family = lambda: socket.AF_INET  # type: ignore[method-assign]
+
+
+_urllib3_force_ipv4()
 from django.conf import settings
 from django.core.files import File
 from django.core.files.base import ContentFile

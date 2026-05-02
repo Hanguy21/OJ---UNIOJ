@@ -191,8 +191,41 @@ TEX_MACROS = r"""
 \renewcommand{\t}{\texttt}
 """
 
+_BEGIN_CENTER = r'\begin{center}'
+_END_CENTER = r'\end{center}'
+
+
+def normalize_tex_for_pandoc(tex):
+    """Best-effort fixes before pandoc; Polygon preview is more lenient than pandoc's TeX parser.
+
+    Common case: a trailing ``\\end{center}`` without a matching ``\\begin{center}`` in the same
+    fragment (or duplicate closes from templates). Surplus ``\\begin{center}`` gets a closing
+    ``\\end{center}`` appended at EOF (bounded iterations to avoid pathological input).
+    """
+    tex = tex.replace('\r\n', '\n')
+    max_fixes = 32
+    fixes = 0
+    while fixes < max_fixes:
+        begins = tex.count(_BEGIN_CENTER)
+        ends = tex.count(_END_CENTER)
+        if ends > begins:
+            idx = tex.rfind(_END_CENTER)
+            if idx == -1:
+                break
+            tail = tex[idx + len(_END_CENTER):]
+            tex = tex[:idx].rstrip() + tail
+            fixes += 1
+            continue
+        if begins > ends:
+            tex = tex.rstrip() + '\n' + _END_CENTER + '\n'
+            fixes += 1
+            continue
+        break
+    return tex
+
 
 def pandoc_tex_to_markdown(tex):
+    tex = normalize_tex_for_pandoc(tex)
     tex = TEX_MACROS + tex
     with tempfile.TemporaryDirectory() as tmp_dir:
         with open(os.path.join(tmp_dir, 'temp.tex'), 'w', encoding='utf-8') as f:

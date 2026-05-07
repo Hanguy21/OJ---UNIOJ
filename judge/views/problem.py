@@ -1129,6 +1129,33 @@ class ProblemImportPolygon(PermissionRequiredMixin, TitleMixin, TemplateResponse
         return progress
 
     @staticmethod
+    def _parse_polygon_import_log_fields(logs):
+        """Read Polygon id and final DMOJ code from import_polygon CLI output (handles ANSI)."""
+        if not logs:
+            return {}
+        clean = re.sub(r'\x1b\[[0-9;]*m', '', logs)
+        out = {}
+        m = re.search(r'Polygon problem_id:\s*(\d+)', clean)
+        if m:
+            out['polygon_problem_id'] = m.group(1)
+        # Matches "from Polygon name", "reuse existing for Polygon id …", etc.
+        m = re.search(r'DMOJ problem code[^:\n]*:\s*(\S+)', clean)
+        if m:
+            out['dmoj_problem_code'] = m.group(1).strip()
+        # Must not match the status line "... | Problem: <polygon_id> - ..." (bare id / relative junk).
+        url_hits = re.findall(r'Problem:\s*(https?://\S+|/problem/[^\s]+)', clean)
+        if url_hits:
+            out['problem_url_from_log'] = url_hits[-1].strip()
+        return out
+
+    @staticmethod
+    def _problem_code_from_problem_url(url):
+        if not url:
+            return ''
+        m = re.search(r'/problem/([^/?#]+)', url)
+        return m.group(1) if m else ''
+
+    @staticmethod
     def _build_default_owners(current_user):
         usernames = []
         admin_user = User.objects.filter(username='admin').first()
@@ -1279,10 +1306,29 @@ class ProblemImportPolygonStatus(PermissionRequiredMixin, View):
             meta['progress'] = parsed_progress
             meta_path.write_text(json.dumps(meta), encoding='utf-8')
 
-        problem_code = meta.get('problem_code')
+        parsed = ProblemImportPolygon._parse_polygon_import_log_fields(logs)
+        problem_code = (parsed.get('dmoj_problem_code') or '').strip() or (meta.get('problem_code') or '').strip()
+        polygon_problem_id = parsed.get('polygon_problem_id') or meta.get('problem_ref') or ''
+
         problem_url = ''
-        if problem_code and not meta.get('running'):
-            if Problem.objects.filter(code=problem_code).exists():
+        if not meta.get('running'):
+            url_from_log = (parsed.get('problem_url_from_log') or '').strip()
+            if url_from_log:
+                problem_url = url_from_log
+                code_from_url = ProblemImportPolygon._problem_code_from_problem_url(url_from_log)
+                if code_from_url and (
+                    not problem_code
+                    or not Problem.objects.filter(code=problem_code).exists()
+                ):
+                    problem_code = code_from_url
+            elif problem_code and Problem.objects.filter(code=problem_code).exists():
+                problem_url = reverse('problem_detail', args=[problem_code])
+            elif (
+                problem_code
+                and not meta.get('failed')
+                and not meta.get('cancelled')
+                and re.search(r'Imported Polygon problem \d+ successfully', logs)
+            ):
                 problem_url = reverse('problem_detail', args=[problem_code])
 
         return JsonResponse({
@@ -1294,6 +1340,7 @@ class ProblemImportPolygonStatus(PermissionRequiredMixin, View):
             'error': meta.get('error', ''),
             'logs': logs,
             'problem_code': problem_code,
+            'polygon_problem_id': polygon_problem_id,
             'problem_url': problem_url,
         })
 

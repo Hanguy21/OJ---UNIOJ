@@ -195,50 +195,82 @@ _BEGIN_CENTER = r'\begin{center}'
 _END_CENTER = r'\end{center}'
 
 
-def normalize_tex_for_pandoc(tex):
-    """Best-effort fixes before pandoc; Polygon preview is more lenient than pandoc's TeX parser.
-
-    Common case: a trailing ``\\end{center}`` without a matching ``\\begin{center}`` in the same
-    fragment (or duplicate closes from templates). Surplus ``\\begin{center}`` gets a closing
-    ``\\end{center}`` appended at EOF (bounded iterations to avoid pathological input).
-    """
-    tex = tex.replace('\r\n', '\n')
-    max_fixes = 32
+def _balance_tex_env(tex, begin_marker, end_marker, max_fixes=48):
+    """Close or strip simple LaTeX environments by counting markers (Polygon fragments often mismatch)."""
     fixes = 0
     while fixes < max_fixes:
-        begins = tex.count(_BEGIN_CENTER)
-        ends = tex.count(_END_CENTER)
+        begins = tex.count(begin_marker)
+        ends = tex.count(end_marker)
         if ends > begins:
-            idx = tex.rfind(_END_CENTER)
+            idx = tex.rfind(end_marker)
             if idx == -1:
                 break
-            tail = tex[idx + len(_END_CENTER):]
+            tail = tex[idx + len(end_marker):]
             tex = tex[:idx].rstrip() + tail
             fixes += 1
             continue
         if begins > ends:
-            tex = tex.rstrip() + '\n' + _END_CENTER + '\n'
+            tex = tex.rstrip() + '\n' + end_marker + '\n'
             fixes += 1
             continue
         break
     return tex
 
 
-def pandoc_tex_to_markdown(tex):
-    tex = normalize_tex_for_pandoc(tex)
-    tex = TEX_MACROS + tex
+def normalize_tex_for_pandoc(tex):
+    """Best-effort fixes before pandoc; Polygon preview is more lenient than pandoc's TeX parser.
+
+    Handles common mismatches: ``\\begin{problem}``/``\\end{problem}`` (Notes often contain a stray
+    ``\\end{problem}``), ``\\end{center}``, ``itemize``/``enumerate`` (count-based; bounded iterations).
+    """
+    tex = tex.replace('\r\n', '\n')
+    # Polygon "Notes" / snippets sometimes paste a trailing \end{problem} without matching \begin.
+    tex = _balance_tex_env(tex, r'\begin{problem}', r'\end{problem}')
+    tex = _balance_tex_env(tex, r'\begin{itemize}', r'\end{itemize}')
+    tex = _balance_tex_env(tex, r'\begin{enumerate}', r'\end{enumerate}')
+    tex = _balance_tex_env(tex, _BEGIN_CENTER, _END_CENTER)
+    return tex
+
+
+def _pandoc_fallback_markdown(normalized_tex, section=''):
+    """When pandoc fails, still embed TeX so Polygon imports can complete."""
+    body = (normalized_tex or '').strip()
+    if not body:
+        return ''
+    max_len = 400_000
+    if len(body) > max_len:
+        body = body[:max_len] + '\n\n…(truncated)'
+    fence = '````'
+    while fence in body:
+        fence += '`'
+    label = section or 'section'
+    header = f'\n\n> **Import:** TeX→Markdown failed for **{label}**; raw LaTeX follows.\n\n'
+    return header + f'{fence}latex\n{body}\n{fence}\n'
+
+
+def pandoc_tex_to_markdown(tex, *, section=''):
+    raw_in = tex if isinstance(tex, str) else str(tex or '')
+    if not raw_in.strip():
+        return ''
+    normalized = normalize_tex_for_pandoc(raw_in)
+    payload = TEX_MACROS + normalized
     with tempfile.TemporaryDirectory() as tmp_dir:
         with open(os.path.join(tmp_dir, 'temp.tex'), 'w', encoding='utf-8') as f:
-            f.write(tex)
+            f.write(payload)
 
         with open(os.path.join(tmp_dir, 'filter.lua'), 'w', encoding='utf-8') as f:
             f.write(PANDOC_FILTER)
 
-        subprocess.run(
-            ['pandoc', '--lua-filter=filter.lua', '-t', 'gfm', '-o', 'temp.md', 'temp.tex'],
-            cwd=tmp_dir,
-            check=True,
-        )
+        try:
+            subprocess.run(
+                ['pandoc', '--lua-filter=filter.lua', '-t', 'gfm', '-o', 'temp.md', 'temp.tex'],
+                cwd=tmp_dir,
+                check=True,
+            )
+        except subprocess.CalledProcessError as exc:
+            label = section or 'statement'
+            print(f'WARNING: pandoc failed for {label} ({exc!s}); using LaTeX fallback.')
+            return _pandoc_fallback_markdown(normalized, section=label)
 
         with open(os.path.join(tmp_dir, 'temp.md'), 'r', encoding='utf-8') as f:
             md = f.read()
@@ -559,15 +591,31 @@ def parse_statements(problem_meta, root, package):
     def process_images(text):
         image_cache = problem_meta['image_cache']
 
+        def resolve_zip_member(rel_path):
+            """Return ZipInfo name or None (handles slash style and case on Linux)."""
+            key = os.path.normpath(rel_path).replace('\\', '/').strip('/')
+            names = package.namelist()
+            if key in names:
+                return key
+            kl = key.lower()
+            for n in names:
+                if n.replace('\\', '/').strip('/').lower() == kl:
+                    return n
+            return None
+
         def save_image(image_path):
             norm_path = os.path.normpath(os.path.join(statement_folder, image_path))
+            resolved = resolve_zip_member(norm_path)
+            if resolved is None:
+                print(f'WARNING: Image not found in Polygon package: {norm_path}')
+                return None
             sha1 = hashlib.sha1()
-            sha1.update(package.open(norm_path, 'r').read())
+            sha1.update(package.open(resolved, 'r').read())
             sha1 = sha1.hexdigest()
 
             if sha1 not in image_cache:
                 image = File(
-                    file=package.open(norm_path, 'r'),
+                    file=package.open(resolved, 'r'),
                     name=os.path.basename(image_path),
                 )
                 data = json.loads(django_uploader(image))
@@ -576,17 +624,25 @@ def parse_statements(problem_meta, root, package):
             return image_cache[sha1]
 
         for image_path in set(re.findall(r'!\[image\]\((.+?)\)', text)):
-            text = text.replace(
-                f'![image]({image_path})',
-                f'![image]({save_image(image_path)})',
-            )
+            url = save_image(image_path)
+            if url is None:
+                safe = image_path.replace('`', "'")
+                replacement = f'*(Missing image file: `{safe}`)*'
+            else:
+                replacement = f'![image]({url})'
+            text = text.replace(f'![image]({image_path})', replacement)
 
         for img_tag in set(re.findall(r'<\s*img[^>]*>', text)):
-            image_path = re.search(r'<\s*img[^>]+src\s*=\s*(["\'])(.*?)\1[^>]*>', img_tag).group(2)
-            text = text.replace(
-                img_tag,
-                img_tag.replace(image_path, save_image(image_path)),
-            )
+            m = re.search(r'<\s*img[^>]+src\s*=\s*(["\'])(.*?)\1[^>]*>', img_tag)
+            if not m:
+                continue
+            image_path = m.group(2)
+            url = save_image(image_path)
+            if url is None:
+                safe = image_path.replace('`', "'")
+                text = text.replace(img_tag, f'*(Missing image file: `{safe}`)*')
+            else:
+                text = text.replace(img_tag, img_tag.replace(image_path, url))
 
         return text
 
@@ -594,25 +650,25 @@ def parse_statements(problem_meta, root, package):
         description = ''
 
         # Legend
-        description += pandoc_tex_to_markdown(problem_properties['legend'])
+        description += pandoc_tex_to_markdown(problem_properties.get('legend') or '', section='legend')
 
         # Input
         description += '\n## Input\n\n'
-        description += pandoc_tex_to_markdown(problem_properties['input'])
+        description += pandoc_tex_to_markdown(problem_properties.get('input') or '', section='input')
 
         # Output
         description += '\n## Output\n\n'
-        description += pandoc_tex_to_markdown(problem_properties['output'])
+        description += pandoc_tex_to_markdown(problem_properties.get('output') or '', section='output')
 
         # Interaction
         if problem_properties['interaction'] is not None:
             description += '\n## Interaction\n\n'
-            description += pandoc_tex_to_markdown(problem_properties['interaction'])
+            description += pandoc_tex_to_markdown(problem_properties['interaction'], section='interaction')
 
         # Scoring
         if problem_properties['scoring'] is not None:
             description += '\n## Scoring\n\n'
-            description += pandoc_tex_to_markdown(problem_properties['scoring'])
+            description += pandoc_tex_to_markdown(problem_properties['scoring'], section='scoring')
 
         # Sample tests
         for i, sample in enumerate(problem_properties['sampleTests'], start=1):
@@ -624,7 +680,7 @@ def parse_statements(problem_meta, root, package):
         # Notes
         if problem_properties['notes'] != '':
             description += '\n## Notes\n\n'
-            description += pandoc_tex_to_markdown(problem_properties['notes'])
+            description += pandoc_tex_to_markdown(problem_properties['notes'], section='notes')
 
         return description
 
@@ -681,7 +737,7 @@ def parse_statements(problem_meta, root, package):
         tutorial = problem_properties['tutorial']
         if isinstance(tutorial, str) and tutorial != '':
             print(f'Converting tutorial in language {language} to Markdown')
-            tutorial = pandoc_tex_to_markdown(tutorial)
+            tutorial = pandoc_tex_to_markdown(tutorial, section='tutorial')
             tutorials.append({
                 'language': language,
                 'tutorial': tutorial,

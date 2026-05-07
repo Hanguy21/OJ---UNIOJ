@@ -4806,6 +4806,9 @@ msgstr ""
 msgid "Problem:"
 msgstr "Bài"
 
+msgid "Polygon problem ID:"
+msgstr "ID bài trên Polygon:"
+
 msgid "Import has been cancelled."
 msgstr ""
 

@@ -13,6 +13,7 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 import requests
+from django.utils.text import slugify
 
 
 def _urllib3_force_ipv4() -> None:
@@ -28,12 +29,14 @@ def _urllib3_force_ipv4() -> None:
 
 _urllib3_force_ipv4()
 from django.conf import settings
+from django.contrib.sites.models import Site
 from django.core.files import File
 from django.core.files.base import ContentFile
 from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
+from django.db.models import Q
+from django.urls import reverse
 from django.utils import timezone
-from django.utils.text import slugify
 from lxml import etree as ET
 
 from judge.management.commands import import_polygon_package as polygon_import
@@ -135,6 +138,70 @@ class PolygonClient:
 class Command(BaseCommand):
     help = "Download and import a Polygon problem by URL/ID"
 
+    @staticmethod
+    def polygon_label_to_problem_code(label, problem_id, exclude_pk=None):
+        """Map Polygon shortName/name to DMOJ ``Problem.code`` (^[a-z0-9_]+$, max 32)."""
+        from judge.models import Problem
+
+        pid = int(problem_id)
+        raw = (label or '').strip()
+        if not raw:
+            s = f'p{pid}'
+        else:
+            t = slugify(raw)
+            t = t.replace('-', '_')
+            t = re.sub(r'[^a-z0-9_]', '', t)
+            s = t if t else f'p{pid}'
+        base = s[:32]
+
+        def is_free(code):
+            qs = Problem.objects.filter(code=code)
+            if exclude_pk is not None:
+                qs = qs.exclude(pk=exclude_pk)
+            return not qs.exists()
+
+        if is_free(base):
+            return base
+        suffix = str(pid)
+        for cut in range(min(len(base), 25), 0, -1):
+            cand = f'{base[:cut]}_{suffix}'[:32]
+            if is_free(cand):
+                return cand
+        fallback = f'p{suffix}'[:32]
+        if is_free(fallback):
+            return fallback
+        return str(pid)[:32]
+
+    @staticmethod
+    def polygon_label_to_base_code(label):
+        """First-choice slug from Polygon label (before ``_problemId`` disambiguation), max 32 chars."""
+        raw = (label or '').strip()
+        if not raw:
+            return ''
+        t = slugify(raw)
+        t = t.replace('-', '_')
+        t = re.sub(r'[^a-z0-9_]', '', t)
+        s = t if t else ''
+        return s[:32]
+
+    @staticmethod
+    def first_problem_for_polygon_import(problem_id, label):
+        """Oldest Problem row for this Polygon import (slug = Polygon shortName, legacy id, or *_<id>)."""
+        pid_str = str(int(problem_id))
+        base = Command.polygon_label_to_base_code(label or '')
+        if base:
+            found = Problem.objects.filter(code=base).order_by('pk').first()
+            if found:
+                return found
+        found = Problem.objects.filter(code=pid_str).order_by('pk').first()
+        if found:
+            return found
+        return (
+            Problem.objects.filter(code__endswith='_' + pid_str)
+            .order_by('pk')
+            .first()
+        )
+
     def add_arguments(self, parser):
         parser.add_argument("problem", help="Polygon problem URL or problem ID")
         parser.add_argument("--authors", nargs="*", default=[], help="Author usernames for imported problem")
@@ -197,14 +264,12 @@ class Command(BaseCommand):
         polygon_root = Path(getattr(settings, 'POLYGON_PACKAGE_ROOT', '/polygon_package'))
         polygon_root.mkdir(parents=True, exist_ok=True)
         package_path = polygon_root / f"{problem_id}$linux.zip"
-        problem_code = str(problem_id)
 
         self.stdout.write(f"Polygon problem_id: {problem_id}")
-        self.stdout.write(f"DMOJ problem code: {problem_code}")
         self.stdout.write(f"Output package path: {package_path}")
         self._log_progress(3, "Validating Polygon API credentials and problem ID")
         try:
-            owner_name, problem_name, exists = self._fetch_problem_identity(client, problem_id)
+            owner_name, problem_name, short_name, exists = self._fetch_problem_identity(client, problem_id)
         except CommandError as exc:
             raw_error = str(exc)
             if self._classify_polygon_error(raw_error) == "auth":
@@ -222,8 +287,42 @@ class Command(BaseCommand):
             raise CommandError(error_message)
 
         self.stdout.write(
-            f"Polygon account: {owner_name or 'unknown'} | Problem: {problem_id} - {problem_name or 'unknown'}"
+            f"Polygon account: {owner_name or 'unknown'} | Polygon id {problem_id} - {problem_name or 'unknown'}"
         )
+        label_for_code = (short_name or problem_name or '').strip()
+        pid_str = str(int(problem_id))
+        legacy_problem = Problem.objects.filter(code=pid_str).first()
+        computed_code = self.polygon_label_to_problem_code(
+            label_for_code,
+            problem_id,
+            exclude_pk=legacy_problem.pk if legacy_problem else None,
+        )
+
+        existing_problem = legacy_problem
+        if existing_problem is None:
+            existing_problem = Problem.objects.filter(code=computed_code).first()
+        if existing_problem is None:
+            existing_problem = self.first_problem_for_polygon_import(problem_id, label_for_code)
+
+        if existing_problem is not None:
+            problem_code = existing_problem.code
+            self.stdout.write(
+                f"DMOJ problem code (reuse existing for Polygon id {problem_id}): {problem_code}"
+            )
+            dup_q = Q(code=pid_str) | Q(code__endswith='_' + pid_str)
+            base_dup = Command.polygon_label_to_base_code(label_for_code)
+            if base_dup:
+                dup_q |= Q(code=base_dup)
+            if Problem.objects.filter(dup_q).count() > 1:
+                self.stdout.write(
+                    self.style.WARNING(
+                        "Multiple problems on site share this Polygon id; updating the oldest (lowest pk). "
+                        "Delete extra duplicate rows in admin if needed."
+                    )
+                )
+        else:
+            problem_code = computed_code
+            self.stdout.write(f"DMOJ problem code (from Polygon name): {problem_code}")
         self._log_progress(5, "Parsed input and initialized import context")
 
         self._log_progress(10, "Fetching Polygon tags")
@@ -244,7 +343,6 @@ class Command(BaseCommand):
             verify=options["verify_build"],
         )
 
-        existing_problem = Problem.objects.filter(code=problem_code).first()
         if existing_problem is None:
             self.stdout.write("Problem does not exist. Creating new problem from package...")
             self._log_progress(72, "Creating problem in DMOJ")
@@ -274,6 +372,12 @@ class Command(BaseCommand):
 
         self._log_progress(100, "Import completed")
         self.stdout.write(self.style.SUCCESS(f"Imported Polygon problem {problem_id} successfully"))
+        site = Site.objects.order_by('id').first()
+        if site and getattr(site, 'domain', None):
+            problem_url = f"https://{site.domain}{reverse('problem_detail', args=[problem_code])}"
+        else:
+            problem_url = reverse('problem_detail', args=[problem_code])
+        self.stdout.write(f"Problem: {problem_url}")
 
     def _extract_problem_id(self, problem_ref):
         if problem_ref.isdigit():
@@ -348,7 +452,16 @@ class Command(BaseCommand):
         return None
 
     def _fetch_tags(self, client, problem_id):
-        result = client.call_json("problem.viewTags", {"problemId": problem_id})
+        try:
+            result = client.call_json("problem.viewTags", {"problemId": problem_id})
+        except CommandError as exc:
+            # Polygon sometimes returns 5xx for this call; tags are optional for import.
+            self.stdout.write(
+                self.style.WARNING(
+                    f"Skipping Polygon tags (API error; import continues): {exc}"
+                )
+            )
+            return []
         if isinstance(result, list):
             return [str(tag).strip() for tag in result if str(tag).strip()]
         if isinstance(result, str):
@@ -363,8 +476,11 @@ class Command(BaseCommand):
         result = client.call_json("problems.list", {"id": problem_id, "showDeleted": True})
         if isinstance(result, list) and result:
             problem_data = result[0] if isinstance(result[0], dict) else {}
-            return problem_data.get("owner"), problem_data.get("name"), True
-        return None, None, False
+            owner = problem_data.get("owner")
+            name = problem_data.get("name")
+            short_name = problem_data.get("shortName") or name
+            return owner, name, short_name, True
+        return None, None, None, False
 
     def _download_linux_package(self, client, problem_id, output_path, timeout, poll_interval, verify):
         deadline = time.time() + timeout
@@ -544,6 +660,9 @@ class Command(BaseCommand):
         problem.testcase_visibility_mode = ProblemTestcaseAccess.ALWAYS
         if problem.group_id is None:
             problem.group = ProblemGroup.objects.order_by("id").first()
+        new_code = (problem_meta.get("code") or "").strip()
+        if new_code and problem.code != new_code:
+            problem.code = new_code
         problem.save()
 
         problem.allowed_languages.set(Language.objects.filter(include_in_problem=True))

@@ -123,10 +123,26 @@
                             logBox.textContent = data.logs || '';
                             logBox.scrollTop = logBox.scrollHeight;
 
-                            if (data.problem_url && data.problem_code) {
+                            if (data.problem_url && !data.failed && !data.cancelled) {
                                 problemLink.style.display = '';
-                                problemLink.innerHTML = "{{ _('Problem:') }} " +
-                                    '<a href="' + data.problem_url + '">' + data.problem_code + '</a>';
+                                var label = (data.problem_code || '').trim();
+                                if (!label) {
+                                    var u = String(data.problem_url).replace(/\/+$/, '');
+                                    var idx = u.indexOf('/problem/');
+                                    if (idx >= 0) {
+                                        label = u.slice(idx + '/problem/'.length).split('/')[0] || u;
+                                    } else {
+                                        label = u;
+                                    }
+                                }
+                                var line = "{{ _('Problem:') }} " +
+                                    '<a href="' + data.problem_url + '">' + label + '</a>';
+                                if (data.polygon_problem_id) {
+                                    line += '<br><span class="polygon-import-note">' +
+                                        "{{ _('Polygon problem ID:') }} " +
+                                        String(data.polygon_problem_id) + '</span>';
+                                }
+                                problemLink.innerHTML = line;
                             }
 
                             if (data.running) {

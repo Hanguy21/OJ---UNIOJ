@@ -1,5 +1,7 @@
+import csv
 import os
 import time
+import traceback
 from datetime import datetime, timezone as dt_timezone
 
 from django.core.management import BaseCommand, CommandError, call_command
@@ -21,7 +23,15 @@ class Command(BaseCommand):
             dest="polygon_owners",
             action="append",
             default=[],
-            help="Only import Polygon problems whose owner matches this username. Can be repeated.",
+            help="Only import Polygon problems whose owner matches this username. Can be repeated. "
+                 "Problems you can edit but owned by someone else are excluded unless you pass "
+                 "--polygon-all-key-visible.",
+        )
+        parser.add_argument(
+            "--polygon-all-key-visible",
+            action="store_true",
+            help="Use every problem returned by Polygon problems.list for this API key (owned + "
+                 "write access / shared). Ignores --polygon-owner filtering.",
         )
         parser.add_argument("--timeout", type=int, default=600, help="Package build timeout in seconds")
         parser.add_argument("--poll-interval", type=int, default=5, help="Polling interval in seconds")
@@ -29,6 +39,42 @@ class Command(BaseCommand):
         parser.add_argument("--yes", action="store_true", help="Skip confirmation prompt")
         parser.add_argument("--include-deleted", action="store_true", help="Include deleted problems")
         parser.add_argument("--delay", type=int, default=2, help="Seconds to wait between imports")
+        parser.add_argument(
+            "--errors-csv",
+            default="",
+            help="If set, write failed imports (problem id, name, owner, full traceback) to this UTF-8 CSV path",
+        )
+
+    @staticmethod
+    def _format_import_error(exc):
+        return "".join(traceback.format_exception(type(exc), exc, exc.__traceback__)).strip()
+
+    def _write_import_errors_csv(self, path, rows):
+        path = (path or "").strip()
+        if not path or not rows:
+            return
+        abs_path = os.path.abspath(path)
+        parent = os.path.dirname(abs_path)
+        if parent:
+            os.makedirs(parent, exist_ok=True)
+        fieldnames = ["problem_id", "polygon_name", "polygon_owner", "error_log"]
+        try:
+            with open(abs_path, "w", newline="", encoding="utf-8") as fout:
+                writer = csv.DictWriter(fout, fieldnames=fieldnames)
+                writer.writeheader()
+                for row in rows:
+                    writer.writerow(
+                        {
+                            "problem_id": row.get("problem_id", ""),
+                            "polygon_name": row.get("polygon_name", ""),
+                            "polygon_owner": row.get("polygon_owner", ""),
+                            "error_log": row.get("error_log", ""),
+                        }
+                    )
+        except OSError as exc:
+            self.stderr.write(self.style.ERROR(f"Could not write errors CSV {abs_path}: {exc}"))
+            return
+        self.stdout.write(self.style.SUCCESS(f"Wrote {len(rows)} failed import(s) to {abs_path}"))
 
     def handle(self, *args, **options):
         api_key = (options.get("api_key") or "").strip() or os.environ.get("POLYGON_API_KEY", "").strip()
@@ -50,6 +96,7 @@ class Command(BaseCommand):
             client,
             include_deleted=options.get("include_deleted", False),
             polygon_owners=options.get("polygon_owners") or [],
+            all_key_visible=bool(options.get("polygon_all_key_visible")),
         )
         if not problems:
             self.stdout.write("No problems found.")
@@ -69,8 +116,9 @@ class Command(BaseCommand):
 
         success = 0
         failures = []
-        for item in problems:
+        for index, item in enumerate(problems, start=1):
             problem_id = item["id"]
+            self.stdout.write(f"[{index}/{total}] Importing Polygon problem {problem_id} …")
             try:
                 call_command(
                     "import_polygon",
@@ -87,7 +135,14 @@ class Command(BaseCommand):
                 )
                 success += 1
             except Exception as exc:
-                failures.append((problem_id, str(exc)))
+                failures.append(
+                    {
+                        "problem_id": problem_id,
+                        "polygon_name": str(item.get("name", "")),
+                        "polygon_owner": str(item.get("owner", "")),
+                        "error_log": self._format_import_error(exc),
+                    }
+                )
                 self.stderr.write(f"Failed {problem_id}: {exc}")
             finally:
                 delay = max(0, int(options.get("delay") or 0))
@@ -97,10 +152,17 @@ class Command(BaseCommand):
         self.stdout.write(f"Imported: {success}/{total} problems.")
         if failures:
             self.stderr.write("Failures:")
-            for problem_id, message in failures:
-                self.stderr.write(f"- {problem_id}: {message}")
+            for row in failures:
+                log = row.get("error_log") or ""
+                head = log.splitlines()[0] if log else ""
+                self.stderr.write(f"- {row['problem_id']}: {head}")
+            self._write_import_errors_csv(options.get("errors_csv", ""), failures)
+            if not (options.get("errors_csv") or "").strip():
+                self.stdout.write("Tip: use --errors-csv /path/to/file.csv to save full error logs next time.")
+        elif options.get("errors_csv", "").strip():
+            self.stdout.write("(No failures; errors CSV not written.)")
 
-    def _fetch_problem_list(self, client, include_deleted=False, polygon_owners=None):
+    def _fetch_problem_list(self, client, include_deleted=False, polygon_owners=None, all_key_visible=False):
         result = client.call_json("problems.list", {"showDeleted": True})
         if isinstance(result, dict):
             for key in ("problems", "items", "data", "result"):
@@ -111,6 +173,8 @@ class Command(BaseCommand):
             raise CommandError(f"Unexpected Polygon response shape: {type(result).__name__}")
 
         owner_filter = {str(owner).strip().lower() for owner in (polygon_owners or []) if str(owner).strip()}
+        if all_key_visible:
+            owner_filter = set()
         items = []
         for item in result:
             if not isinstance(item, dict):
@@ -119,13 +183,22 @@ class Command(BaseCommand):
                 continue
             problem_id = item.get("id", item.get("problemId"))
             name = item.get("name", item.get("title", ""))
+            short_name = item.get("shortName") or name
             owner = self._extract_owner(item)
             if owner_filter and owner.lower() not in owner_filter:
                 continue
             date_value = self._format_date(self._extract_date_value(item))
             if problem_id is None:
                 continue
-            items.append({"id": problem_id, "name": name, "owner": owner, "date": date_value})
+            items.append(
+                {
+                    "id": problem_id,
+                    "name": name,
+                    "shortName": short_name,
+                    "owner": owner,
+                    "date": date_value,
+                }
+            )
 
         items.sort(key=lambda entry: self._sort_key(entry.get("id")))
         return items
